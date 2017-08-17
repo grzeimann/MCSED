@@ -9,6 +9,7 @@
 
 import os.path as op
 import numpy as np
+import sys
 
 def read_ssp(args):
     if args.ssp.lower() == 'fsps':
@@ -16,8 +17,16 @@ def read_ssp(args):
     
 
 def read_fsps(args):
-    args.metallicity_dict[args.isochrone], args.metallicity
-    filename = op.join('SPS', 'fsps_%s_%0.4f.spec' %(args.isochrone, met))
+    filename = op.join('SPS', 'fsps_%s_%0.4f.spec' %(args.isochrone, 
+                                                     args.metallicity))
+    if not op.exists(filename):
+        print('Metallicity entered, %0.4f, does not match any for %s'
+              'isochrones of the %s models' %(args.isochrone, args.ssp))
+        print('Metallicity options [')
+        for met in args.metallicity_dict[args.isochrone]:
+            print('%0.4f ')
+        print(']')
+        sys.exit(1)
     cnt = 0
     ages = []
     masses = []

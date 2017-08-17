@@ -8,7 +8,7 @@
 """
 
 # Fixed metallicity of SSP models
-metallicity = 0.02
+metallicity = 0.005
 
 # SSP code for models
 ssp = 'fsps' # 'fsps'

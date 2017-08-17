@@ -72,7 +72,16 @@ def parse_args(argv=None):
         
     return args
 
-def read_input_file():
+def read_input_file(args):
+    # read file
+    y = np.zeros((sum(filters),)) 
+    yerr = np.zeros((sum(filters),))            
+    j=0    
+    for i in xrange(nfilters):
+        if filters[i]:
+            y[j]    = obj["f_"+skelton_dict[i]] * 10**(-0.4*(25.0-23.9))
+            yerr[j] = obj["e_"+skelton_dict[i]] * 10**(-0.4*(25.0-23.9))
+            j=j+1
     pass
 
 def build_filter_matrix(args, wave):
@@ -87,6 +96,26 @@ def build_filter_matrix(args, wave):
             Fil_matrix[:,i] = new_through/np.sum(new_through)
         np.savetxt('filter_matrix.txt', Fil_matrix)
         return Fil_matrix
+
+def get_filter_flag(args):
+    nfilters = len(args.filt_dict)
+    filter_flag = np.ones((nfilters,))>0
+    for i in xrange(nfilters):    
+        try:
+            args.catalog_filter_dict[i]
+        except:
+            filter_flag[i]=False
+            
+
+            
+    y = np.zeros((sum(filters),)) 
+    yerr = np.zeros((sum(filters),))            
+    j=0    
+    for i in xrange(nfilters):
+        if filters[i]:
+            y[j]    = obj["f_"+skelton_dict[i]] * 10**(-0.4*(25.0-23.9))
+            yerr[j] = obj["e_"+skelton_dict[i]] * 10**(-0.4*(25.0-23.9))
+            j=j+1
     
 def get_filter_fluxdensities(spec, filter_flag, filter_matrix):
     a = np.dot(spec, filter_matrix)
@@ -156,12 +185,14 @@ def main(argv=None):
     
     # Build Filter Matrix
     filter_matrix = build_filter_matrix(args, wave)
+    filter_flag = get_filter_flag(args)
     
     # Load sources for modelling
     if args.test:
-        y, yerr, z, truth = mock_data(ages, masses, wave, SSP)
+        y, yerr, z, truth = mock_data(ages, masses, wave, SSP, filter_matrix,
+                                      filter_flag)
     else:
-        y, yerr, z = read_input_file()
+        y, yerr, z = read_input_file(args)
         
     
         
