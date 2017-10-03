@@ -28,6 +28,8 @@ from dust_abs import noll
 #from dust_em import draine_li
 from sfh import double_powerlaw
 from ssp import read_ssp
+from astropy.io import fits
+
 
 def parse_args(argv=None):
     # Arguments to parse include ssp code, metallicity, isochrone choice, 
@@ -65,28 +67,17 @@ def parse_args(argv=None):
     config_copy_list = ['metallicity_dict', 'mock_masses', 'mock_redshift',
                         'mock_dust_tau', 'mock_dust_delta', 'mock_dust_bump', 
                         'mock_sfh_tau', 'mock_sfh_b', 'mock_sfh_c',
-                        'filt_dict', 'catalog_filt_dict']
+                        'filt_dict', 'catalog_filt_dict',
+                        'filter_matrix_name']
                         
     for con_copy in config_copy_list:
         setattr(args, con_copy, getattr(config, con_copy))
         
     return args
 
-def read_input_file(args):
-    # read file
-    y = np.zeros((sum(filters),)) 
-    yerr = np.zeros((sum(filters),))            
-    j=0    
-    for i in xrange(nfilters):
-        if filters[i]:
-            y[j]    = obj["f_"+skelton_dict[i]] * 10**(-0.4*(25.0-23.9))
-            yerr[j] = obj["e_"+skelton_dict[i]] * 10**(-0.4*(25.0-23.9))
-            j=j+1
-    pass
-
 def build_filter_matrix(args, wave):
-    if op.exists('filter_matrix.txt'):
-        return np.loadtxt('filter_matrix.txt')
+    if op.exists(args.filter_matrix_name):
+        return np.loadtxt(args.filter_matrix_name)
     else:
         nfilters=len(args.filt_dict)
         Fil_matrix = np.zeros((len(wave),nfilters))
@@ -94,28 +85,49 @@ def build_filter_matrix(args, wave):
             wv, through = np.loadtxt('FILTERS',args.filt_dict[i], unpack=True)
             new_through = np.interp(wave,wv,through,0.0,0.0)
             Fil_matrix[:,i] = new_through/np.sum(new_through)
-        np.savetxt('filter_matrix.txt', Fil_matrix)
+        np.savetxt(args.filter_matrix_name, Fil_matrix)
         return Fil_matrix
 
 def get_filter_flag(args):
     nfilters = len(args.filt_dict)
     filter_flag = np.ones((nfilters,))>0
-    for i in xrange(nfilters):    
+    for i in args.filt_dict.keys():    
         try:
             args.catalog_filter_dict[i]
         except:
             filter_flag[i]=False
-            
+    return filter_flag   
 
+def read_input_file(args):
+    # read file
+    F = np.loadtxt(args.filename)
+    nobj = len(F)
+    fields = ['aegis','cosmos','goodsn','goodss','uds']
+    name_base = '_3dhst.v4.1.cat.FITS'
+    field_dict = {}
+    for field in fields:
+        field_dict[field] = fits.open(op.join('3dhst_catalogs', 
+                                              field+name_base))[1]
+    nfilters = len(args.filt_dict)
+    y = np.zeros((nobj,nfilters))
+    yerr = np.zeros((nobj,nfilters))
+    flag = np.zeros((nobj,nfilters),dtype=bool)
+    z = F[:,2]
+    for i,datum in enumerate(F):
+        loc = datum[0].lower()
+        for j,ind in enumerate(args.filt_dict.keys()):
+            colname = "f_"+args.catalog_filter_dict[ind]
+            ecolname = "e_"+args.catalog_filter_dict[ind]
+            if colname in field_dict[loc].columns.names:
+                y[i,j] = field_dict[loc].data[colname][int(datum[1])]
+                yerr[i,j] = field_dict[loc].data[ecolname][int(datum[1])]
+                flag[i,j] = True
+            else:
+                y[i,j] = 0.0
+                yerr[i,j] = 0.0
+                flag[i,j] = False
+    return y, yerr, z, flag
             
-    y = np.zeros((sum(filters),)) 
-    yerr = np.zeros((sum(filters),))            
-    j=0    
-    for i in xrange(nfilters):
-        if filters[i]:
-            y[j]    = obj["f_"+skelton_dict[i]] * 10**(-0.4*(25.0-23.9))
-            yerr[j] = obj["e_"+skelton_dict[i]] * 10**(-0.4*(25.0-23.9))
-            j=j+1
     
 def get_filter_fluxdensities(spec, filter_flag, filter_matrix):
     a = np.dot(spec, filter_matrix)
@@ -169,9 +181,27 @@ def plot_results():
 def output_results():
     pass
 
-def mock_data():
-    # draw random sample
-    # calculate theta given input mass
+def draw_uniform_dist(nsamples, start, end):
+    return np.random.rand(nsamples)*(end-start) + start
+    
+def mock_data(args, nsamples=100):
+    mock_list = ['mass', 'redshift', 'dust_tau', 'dust_delta', 'dust_bump', 
+                 'sfh_tau', 'sfh_a', 'sfh_b', 'sfh_c']
+    theta = []
+    for mock in mock_list:
+        theta.append(draw_uniform_dist(nsamples, getattr(args,'mock_'+mock)[0], 
+                                       getattr(args,'mock_'+mock)[1]))
+    # calculate theta given input mass (need age or SFR)
+    '''
+    tim       = ages / 1e9
+    timek     = np.logspace(-3,2,2000)   
+    sfh       = doublepowerlaw_sfh(timek,10**(theta[3]),theta[5],theta[6],theta[7])
+    ageval    = 10**(theta[4])
+    sel = tim <= ageval
+    sfr       = np.interp(ageval - tim,timek,sfh)
+    weight = np.diff(np.hstack([0,tim]))*1e9*sfr 
+    weight[~sel]=0
+    '''                                    
     # get flux/mass back
     # output y, yerr, z, truth
     pass
@@ -189,10 +219,17 @@ def main(argv=None):
     
     # Load sources for modelling
     if args.test:
-        y, yerr, z, truth = mock_data(ages, masses, wave, SSP, filter_matrix,
-                                      filter_flag)
+        y, yerr, z, flag, truth = mock_data(ages, masses, wave, SSP, 
+                                            filter_matrix,
+                                            filter_flag)
     else:
-        y, yerr, z = read_input_file(args)
+        y, yerr, z, flag = read_input_file(args)
+        
+    run_emcee()
+    
+    plot_results()
+    
+    output_results()
         
     
         

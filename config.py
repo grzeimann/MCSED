@@ -27,11 +27,14 @@ mock_dust_tau = [0.0, 2.0] # optical depth in V band
 mock_dust_delta = [-1., 1.] # calzetti = 0.0, pure-grey = 1.0
 mock_dust_bump = [0.0, 5.0] # MW = 4.1, calzetti = 0.0
 mock_sfh_tau = [-3.0, 1.0] # Log Gyr
+mock_sfh_a = [-1.,3.]
 mock_sfh_b = [0., 5.]
 mock_sfh_c = [0., 5.]
 
 # Filters
 ''' Common filter file names in FILTERS folder'''
+
+filter_matrix_name = 'standard_filter_matrix.txt'
 filt_dict={0:'SubB.res', 1:'SubIB427.res', 2:'SubIB445.res', 3:'SubIB464.res',
            4:'CFHTi.res', 5:'SubIB484.res', 6:'SubIB505.res', 7:'SubIB527.res',
            8:'SubIB550.res', 9:'SubIB574.res', 10:'SubIB598.res', 
@@ -49,8 +52,19 @@ filt_dict={0:'SubB.res', 1:'SubIB427.res', 2:'SubIB445.res', 3:'SubIB464.res',
            44:'VLT_issac_Ks.res', 45:'iracch3.res', 46:'iracch4.res',
            47:'SubIB738.res', 48:'SubIB797.res'}
 
-''' Catalog name of filter and dictionary value to the corresponding file'''   
+''' Catalog column name of filter and dictionary value to the filter file'''   
 catalog_filter_dict={1:'ia427', 2:'ia445', 6:'ia505', 7:'ia527', 8:'ia550', 
+                     9:'ia574', 10:'ia598', 11:'ia624', 12:'ia651', 13:'ia679', 
+                     15:'ia767', 17:'ia856', 19:'f435w', 20:'f606wcand', 
+                     21:'f814wcand', 22:'f125w', 23:'f140w', 24:'f160w', 
+                     26:'irac1', 27:'irac2', 28:'u', 29:'r', 30:'u38', 31:'b', 
+                     32:'v', 34:'f606w', 35:'rc', 36:'f775w', 37:'i', 
+                     38:'f850lp', 39:'f850lpcand', 40:'j', 41:'tenisj', 42:'h', 
+                     43:'tenisk', 44:'ks', 45:'irac3', 46:'irac4', 47:'ia738',
+                     48:'ia797'}
+                     
+''' Filters for testing code'''                   
+test_filter_dict={1:'ia427', 2:'ia445', 6:'ia505', 7:'ia527', 8:'ia550', 
                      9:'ia574', 10:'ia598', 11:'ia624', 12:'ia651', 13:'ia679', 
                      15:'ia767', 17:'ia856', 19:'f435w', 20:'f606wcand', 
                      21:'f814wcand', 22:'f125w', 23:'f140w', 24:'f160w', 
