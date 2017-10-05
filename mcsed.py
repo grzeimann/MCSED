@@ -23,6 +23,7 @@ import argparse as ap
 import numpy as np
 import os.path as op
 import emcee
+import logging
 import config
 from dust_abs import noll
 #from dust_em import draine_li
@@ -32,8 +33,20 @@ from astropy.io import fits
 
 
 def parse_args(argv=None):
-    # Arguments to parse include ssp code, metallicity, isochrone choice, 
-    #   whether this is real data or mock data
+    '''Parse arguments from commandline or a manually passed list
+
+    Parameters
+    ----------
+    argv : list
+        list of strings such as ['-f', 'input_file.txt', '-s', 'default.ssp']
+
+    Returns
+    -------
+    args : class
+        args class has attributes of each input, i.e., args.filename
+        as well as astributes from the config file
+    '''
+
     parser = ap.ArgumentParser(description="MCSED",
                             formatter_class=ap.RawTextHelpFormatter)
 
@@ -59,11 +72,13 @@ def parse_args(argv=None):
                    
     args = parser.parse_args(args=argv)
     
+    # Use config values if none are set in the input
     arg_inputs = ['ssp', 'metallicity']
     for arg_i in arg_inputs:
         if getattr(args, arg_i) is None:
             setattr(args, arg_i, getattr(config, arg_i))
     
+    # Copy list of config values to the args class
     config_copy_list = ['metallicity_dict', 'mock_masses', 'mock_redshift',
                         'mock_dust_tau', 'mock_dust_delta', 'mock_dust_bump', 
                         'mock_sfh_tau', 'mock_sfh_b', 'mock_sfh_c',
@@ -74,8 +89,46 @@ def parse_args(argv=None):
         setattr(args, con_copy, getattr(config, con_copy))
         
     return args
+    
+def setup_logging():
+    '''Setup Logging for general MCSED call
+    '''
+    log = logging.getLogger('mcsed')
+    if not len(log.handlers):
+        fmt = '[%(levelname)s - %(asctime)s] %(message)s'
+        level = logging.INFO
+           
+        fmt = logging.Formatter(fmt)
+        
+        handler = logging.StreamHandler()
+        handler.setFormatter(fmt)
+        handler.setLevel(level)
+        
+        log = logging.getLogger('mcsed')
+        log.setLevel(logging.DEBUG)
+        log.addHandler(handler)
+    return log
 
 def build_filter_matrix(args, wave):
+    '''Build a filter matrix with each row being an index of wave and
+    each column being a unique filter.  This makes computation from spectra
+    to magnitudes quick and easy.
+
+    Parameters
+    ----------
+    args : class
+        The args class is carried from function to function with information
+        from command line input and config.py
+    wave : numpy array
+        The wave array corresponds to the wavelengths of the SSP models being
+        used.
+    
+    Returns
+    -------
+    Fil_matrix : numpy array (2 dim)
+        As mentioned above, the Fil_matrix has rows of wavelength and
+        columns for each filter in args.filt_dict/config.filt_dict
+    '''
     if op.exists(args.filter_matrix_name):
         return np.loadtxt(args.filter_matrix_name)
     else:
@@ -88,18 +141,52 @@ def build_filter_matrix(args, wave):
         np.savetxt(args.filter_matrix_name, Fil_matrix)
         return Fil_matrix
 
-def get_filter_flag(args):
+def get_test_filters(args):
+    '''Used in test mode, this function loops through args.filt_dict and sets
+    a flag to true if the filter is in args.test_filter_dict or false if it
+    is not.  This filter_flag is used later in the quick calculation of 
+    filter magnitudes.
+
+    Parameters
+    ----------
+    args : class
+        The args class is carried from function to function with information
+        from command line input and config.py
+    
+    Returns
+    -------
+    filter_flag : numpy array (bool)
+        Explained above.
+    '''
     nfilters = len(args.filt_dict)
-    filter_flag = np.ones((nfilters,))>0
+    filter_flag = np.zeros((nfilters,), dtype=bool)
     for i in args.filt_dict.keys():    
-        try:
-            args.catalog_filter_dict[i]
-        except:
-            filter_flag[i]=False
+        if i in args.test_filter_dict:
+            filter_flag[i]=True
     return filter_flag   
 
 def read_input_file(args):
-    # read file
+    '''This function reads a very specific input file and joins it with 
+    archived 3dhst catalogs.  The input file should have the following columns:
+    FIELD, ID, Z
+    
+    Parameters
+    ----------
+    args : class
+        The args class is carried from function to function with information
+        from command line input and config.py
+    
+    Returns
+    -------
+    y : numpy array (2 dim)
+        Photometric magnitudes from the 3DHST survey for each input source
+    yerr : numpy array (2 dim)
+        Photometric errors in magnitudes
+    z : numpy array (1 dim)
+        Redshift from the file returned as a numpy array
+    flag : numpy array (2 dim)
+        Flag set to True for filters in the catalog_filter_dict in config.py
+    '''
     F = np.loadtxt(args.filename)
     nobj = len(F)
     fields = ['aegis','cosmos','goodsn','goodss','uds']
@@ -130,19 +217,64 @@ def read_input_file(args):
             
     
 def get_filter_fluxdensities(spec, filter_flag, filter_matrix):
-    a = np.dot(spec, filter_matrix)
-    return a[filter_flag]
+    '''This function reads a very specific input file and joins it with 
+    archived 3dhst catalogs.  The input file should have the following columns:
+    FIELD, ID, Z
+    
+    Parameters
+    ----------
+    args : class
+        The args class is carried from function to function with information
+        from command line input and config.py
+    
+    Returns
+    -------
+    y : numpy array (2 dim)
+        Photometric magnitudes from the 3DHST survey for each input source
+    yerr : numpy array (2 dim)
+        Photometric errors in magnitudes
+    z : numpy array (1 dim)
+        Redshift from the file returned as a numpy array
+    flag : numpy array (2 dim)
+        Flag set to True for filters in the catalog_filter_dict in config.py
+    '''
+    mags = np.dot(spec, filter_matrix[:,filter_flag])
+    return 
  
 def build_csp(theta, ages, seds, masses, wave, zobs):
-    
-    pass
+    # redo this so that it is clean and makes sense
+    tim = ages / 1e9
+    timek = np.logspace(-3,2,2000)   
+    sfh = double_powerlaw(timek, 10**(theta[3]), theta[5],
+                                   theta[6], theta[7])
+    ageval = 10**(theta[4])
+    sel = tim <= ageval
+    sfr = np.interp(ageval - tim,timek,sfh)
+    weight = np.diff(np.hstack([0,tim]))*1e9*sfr 
+    weight[~sel] = 0
+    A=np.nonzero(tim<=ageval)[0][-1]
+    B=np.nonzero(tim>=ageval)[0][0]
+    if A==B:
+        arr = np.dot(seds,weight)
+        mass = np.sum(weight*masses)
+    else:
+        lw = ageval - tim[A]
+        wei = lw*1e9*np.interp(ageval,timek,sfh)
+        weight[B]=wei  
+        arr = np.dot(seds,weight)
+        mass = np.sum(weight*masses)
+        
+    arr_dust = arr * np.exp(-1 * noll(wave,theta[0],theta[1],theta[2]))
+    # Redshift
+    arr_obs = np.interp(wave,wave*(1+zobs),arr_dust)
+    return arr_obs, mass
 
 def testbounds(theta):
     return False
 
 def lnprior(theta):
     flag = testbounds(theta)
-    if not flag:
+    if flag:
         return -np.inf
     else:
         return 0.0
@@ -152,9 +284,9 @@ def lnlike(theta, ages, seds, masses, wave, zobs, y, yerr, filters, sigma_m):
     if flag:
         return -np.inf, -np.inf
     else:
-        flux, mass = build_csp(theta, ages, seds, masses, wave, zobs)
-        model_y = get_filter_fluxdensities(wave, flux, filters)
-        inv_sigma2     = 1.0/(yerr**2+(model_y*sigma_m)**2)
+        spec, mass = build_csp(theta, ages, seds, masses, wave, zobs)
+        model_y = get_filter_fluxdensities(spec, filter_flag, filter_matrix)
+        inv_sigma2 = 1.0/(yerr**2+(model_y*sigma_m)**2)
         return (-0.5*np.sum((y-model_y)**2*inv_sigma2) 
                     - 0.5*np.sum(np.log(1/inv_sigma2)), mass)
 
@@ -184,24 +316,29 @@ def output_results():
 def draw_uniform_dist(nsamples, start, end):
     return np.random.rand(nsamples)*(end-start) + start
     
-def mock_data(args, nsamples=100):
+def mock_data(args, ages, masses, wave, SSP, filter_matrix, filter_flag,
+              nsamples=100):
+    # Build fake theta, set z, mass, age to get sfh_a
     mock_list = ['mass', 'redshift', 'dust_tau', 'dust_delta', 'dust_bump', 
                  'sfh_tau', 'sfh_a', 'sfh_b', 'sfh_c']
     theta = []
     for mock in mock_list:
         theta.append(draw_uniform_dist(nsamples, getattr(args,'mock_'+mock)[0], 
                                        getattr(args,'mock_'+mock)[1]))
+    zobs = draw_uniform_dist(nsamples, 1.9, 2.35)
+    theta = np.array(theta).swapaxes(0,1)
+    
+    y_model = []
+    
+    mass = []
+    for thet in theta:
+        spec, m = build_csp(thet, ages, SSP, masses, wave, zobs)
+        mass.append(m)
+        y = get_filter_fluxdensities(spec, filter_flag, filter_matrix)
+        y.append()
+        
     # calculate theta given input mass (need age or SFR)
-    '''
-    tim       = ages / 1e9
-    timek     = np.logspace(-3,2,2000)   
-    sfh       = doublepowerlaw_sfh(timek,10**(theta[3]),theta[5],theta[6],theta[7])
-    ageval    = 10**(theta[4])
-    sel = tim <= ageval
-    sfr       = np.interp(ageval - tim,timek,sfh)
-    weight = np.diff(np.hstack([0,tim]))*1e9*sfr 
-    weight[~sel]=0
-    '''                                    
+                                
     # get flux/mass back
     # output y, yerr, z, truth
     pass
@@ -215,13 +352,12 @@ def main(argv=None):
     
     # Build Filter Matrix
     filter_matrix = build_filter_matrix(args, wave)
-    filter_flag = get_filter_flag(args)
     
     # Load sources for modelling
     if args.test:
-        y, yerr, z, flag, truth = mock_data(ages, masses, wave, SSP, 
-                                            filter_matrix,
-                                            filter_flag)
+        filter_flag = get_test_filters(args)
+        y, yerr, z, flag, truth = mock_data(args, ages, masses, wave, SSP, 
+                                            filter_matrix, filter_flag)
     else:
         y, yerr, z, flag = read_input_file(args)
         
