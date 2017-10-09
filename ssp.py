@@ -69,4 +69,4 @@ def read_fsps(args):
                     masses.append(l[1])
                 else:
                     spec.append(np.array(l) / (4.*np.pi*pc10**2))
-    return np.array(ages), np.array(masses), wave, np.array(spec)
+    return 10**(np.array(ages)-9.), np.array(masses), wave, np.array(spec)
