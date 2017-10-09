@@ -21,9 +21,7 @@ import numpy as np
 import os.path as op
 import logging
 import config
-from dust_abs import noll
 # from dust_em import draine_li
-from sfh import double_powerlaw
 from ssp import read_ssp
 from astropy.io import fits
 from mcsed import Mcsed
@@ -51,7 +49,6 @@ def setup_logging():
         handler.setLevel(level)
         # Build log with name, mcsed
         log = logging.getLogger('mcsed')
-        # FIXME find out if this is needed
         log.setLevel(logging.DEBUG)
         log.addHandler(handler)
     return log
@@ -108,7 +105,7 @@ def parse_args(argv=None):
                         'mock_dust_tau', 'mock_dust_delta', 'mock_dust_bump',
                         'mock_sfh_tau', 'mock_sfh_b', 'mock_sfh_c',
                         'filt_dict', 'catalog_filt_dict',
-                        'filter_matrix_name']
+                        'filter_matrix_name', 'sfh', 'dust_law']
 
     for con_copy in config_copy_list:
         setattr(args, con_copy, getattr(config, con_copy))
@@ -229,119 +226,6 @@ def read_input_file(args):
     return y, yerr, z, flag
 
 
-def get_filter_fluxdensities(spec, filter_flag, filter_matrix):
-    '''Convert a spectrum to photometric fluxes for a given filter set
-
-    Parameters
-    ----------
-    spec : numpy array (2 dim)
-        The spectrum of a model to be converted in magnitudes
-    filter_flag : numpy array (1 dim)
-        List of boolean the length of the number of filter in args.filt_dict
-        True values are for filters in the catalog.
-    filter_matrix : numpy array (2 dim)
-        The filter_matrix has rows of wavelength and
-        columns for each filter in args.filt_dict/config.filt_dict
-
-    Returns
-    -------
-    mags : numpy array (1 dim)
-        Photometric magnitudes for an input spectrum
-    '''
-    mags = np.dot(spec, filter_matrix[:, filter_flag])
-    return mags
-
-
-def build_csp(theta, ages, seds, masses, wave, zobs, sfh_func=double_powerlaw):
-    '''Build a composite stellar population model for a set of input parameters
-
-    Parameters
-    ----------
-    theta : list
-        SED parameter list for SFH and dust absorption
-    ages : numpy array (1 dim)
-        Time in Gyr for the SSP models
-    seds : numpy array (2 dim)
-        SSP models for different ages and rows of wavelength
-    masses : numpy array (1 dim)
-        Remnant mass of each SSP models for each age
-    wave : numpy array (1 dim)
-        Wavelength for all SSP model
-    zobs : float
-        Redshift for model source
-
-    Returns
-    -------
-    csp : numpy array (1 dim)
-        Composite stellar population model
-    mass : float
-        Mass for csp given the SFH input
-    '''
-    # Time array for sfh
-    timek = np.logspace(-3, 2, 2000)
-    # FIXME make this general for any sfh_func, no solution in mind yet
-    sfh = sfh_func(timek, 10**(theta[3]), theta[5], theta[6], theta[7])
-    ageval = 10**(theta[4])
-    # Take only ages < age of galaxy for modeling
-    sel = ages <= ageval
-    # SFR interpolated from the finer sfh
-    sfr = np.interp(ageval - ages, timek, sfh)
-    # The weight is time between ages of each SSP
-    weight = np.diff(np.hstack([0, ages])) * 1e9 * sfr
-    # ages > ageval have zero weight
-    weight[~sel] = 0
-    # Cover the two cases where there is a fractional age range or not
-    A = np.nonzero(ages <= ageval)[0][-1]
-    B = np.nonzero(ages >= ageval)[0][0]
-    if A == B:
-        arr = np.dot(seds, weight)
-        mass = np.sum(weight*masses)
-    else:
-        lw = ageval - ages[A]
-        wei = lw * 1e9 * np.interp(ageval, timek, sfh)
-        weight[B] = wei
-        arr = np.dot(seds, weight)
-        mass = np.sum(weight * masses)
-
-    arr_dust = arr * np.exp(-1 * noll(wave, theta[0], theta[1], theta[2]))
-    # Redshift
-    csp = np.interp(wave, wave * (1+zobs), arr_dust)
-    return csp, mass
-
-
-def testbounds(theta):
-    return False
-
-
-def lnprior(theta):
-    flag = testbounds(theta)
-    if flag:
-        return -np.inf
-    else:
-        return 0.0
-
-
-def lnlike(theta, ages, seds, masses, wave, zobs, y, yerr, filters, sigma_m):
-    flag = testbounds(theta)
-    if flag:
-        return -np.inf, -np.inf
-    else:
-        spec, mass = build_csp(theta, ages, seds, masses, wave, zobs)
-        model_y = get_filter_fluxdensities(spec, filter_flag, filter_matrix)
-        inv_sigma2 = 1.0/(yerr**2+(model_y*sigma_m)**2)
-        return (-0.5*np.sum((y-model_y)**2*inv_sigma2) 
-                    - 0.5*np.sum(np.log(1/inv_sigma2)), mass)
-
-
-def lnprob(theta, ages, seds, masses, wave, zobs, y, yerr, filters):
-    lp = lnprior(theta)
-    lnl , mass = lnlike(theta, ages, seds, masses, wave, y, yerr, zobs, 
-                        filters)
-    if not np.isfinite(lp):
-        return -np.inf, -np.inf
-    return lp+lnl, mass
-
-
 def dust_absorption():
     pass
 
@@ -409,6 +293,10 @@ def main(argv=None):
     # Make one instance of Mcsed for speed on initialization
     # Then replace the key variables each iteration for a given galaxy
     # Load sources for modelling
+
+    mcsed_model = Mcsed(filter_matrix, SSP, ages, masses, wave, args.sfh,
+                        args.dust_law)
+                        
     if args.test:
         filter_flag = get_test_filters(args)
         y, yerr, z, flag, truth = mock_data(args, ages, masses, wave, SSP,
