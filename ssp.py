@@ -10,28 +10,29 @@ import os.path as op
 import numpy as np
 import sys
 
+
 def read_ssp(args):
     ''' Read in SPS model and return ages, masses, wavelength, and spectra
-    
+
     Parameters
     ----------
     args : class
         The args class from mcsed.parse_args()
-        
+
     '''
     if args.ssp.lower() == 'fsps':
         return read_fsps(args)
-    
+
 
 def read_fsps(args):
-    '''Read in the stellar population models from fsps for a given isochrone 
+    '''Read in the stellar population models from fsps for a given isochrone
     and metallicity.
-    
+
     Parameters
     ----------
     args : class
         The args class from mcsed.parse_args()
-        
+
     Returns
     -------
     ages : numpy array (1 dim)
@@ -44,11 +45,11 @@ def read_fsps(args):
         Spectra in f_nu (ergs/s/cm^2/Hz) at 10pc
     '''
     pc10 = 10. * 3.08567758e18
-    filename = op.join('SPS', 'fsps_%s_%0.4f.spec' %(args.isochrone, 
-                                                     args.metallicity))
+    filename = op.join('SPS', 'fsps_%s_%0.4f.spec' % (args.isochrone,
+                                                      args.metallicity))
     if not op.exists(filename):
         print('Metallicity entered, %0.4f, does not match any of the %s'
-              'isochrones of the %s models' %(args.isochrone, args.ssp))
+              'isochrones of the %s models' % (args.isochrone, args.ssp))
         print('Metallicity options [')
         for met in args.metallicity_dict[args.isochrone]:
             print('%0.4f ')
@@ -60,9 +61,9 @@ def read_fsps(args):
     spec = []
     with open(filename) as f:
         for lines in f:
-            if cnt==9:
+            if cnt == 9:
                 wave = np.array(lines.split(' '))
-            if cnt>9:
+            if cnt > 9:
                 l = lines.split(' ')
                 if len(l) == 4:
                     ages.append(l[0])
