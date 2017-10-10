@@ -1,16 +1,17 @@
-""" MCSED
+""" SED fitting class using emcee for parameter estimation
 
+    CURRENT LIMITATIONS:
+        A) Constant metallicity for input SSP
+        B) Dust Emission is ad hoc from Draine and Li (2007)
 
-1) CURRENT LIMITATIONS:
-       A) Constant metallicity for input SSP
-       B) Dust Emission is ad hoc from Draine and Li (2007)
-   OPTIONAL FITTED PARAMETERS:
-       A) SFH
-           a) tau_sfh, age, a, b, c
-       B) Dust law
-           b) tau_dust, delta, Eb
-   OUTPUT PRODUCTS:
-       A) XXX Plot
+    OPTIONAL FITTED PARAMETERS:
+        A) SFH
+            a) tau_sfh, age, a, b, c
+        B) Dust law
+            b) tau_dust, delta, Eb
+
+    OUTPUT PRODUCTS:
+        A) XXX Plot
 
 .. moduleauthor:: Greg Zeimann <gregz@astro.as.utexas.edu>
 
@@ -28,7 +29,7 @@ class Mcsed:
     def __init__(self, filter_matrix, ssp_spectra, ssp_ages, ssp_masses,
                  wavelength, sfh_name, dust_abs_name, data_mags=None,
                  data_magerrs=None, redshift=None, filter_flag=None,
-                 input_spectrum=None, input_params=None):
+                 input_spectrum=None, input_params=None, sigma_m=0.02):
         ''' Initialize the Mcsed class.
 
         Init
@@ -64,6 +65,10 @@ class Mcsed:
         input_params : list
             input parameters for modeling.  Intended for testing fitting
             procedure.
+        sigma_m : float
+            Fractional error expected from the models.  This is used in
+            the log likelihood calculation.  No model is perfect, and this is
+            more or less a fixed parameter to encapsulate that.
         '''
         # Initialize all argument inputs
         self.filter_matrix = filter_matrix
@@ -79,6 +84,7 @@ class Mcsed:
         self.filter_flag = filter_flag
         self.input_spectrum = input_spectrum
         self.input_params = input_params
+        self.sigma_m = sigma_m
 
         # Set up logging
         self.setup_logging()
@@ -113,9 +119,9 @@ class Mcsed:
 
     def get_filter_fluxdensities(self):
         '''Convert a spectrum to photometric fluxes for a given filter set.
-        The photometric fluxes with be in the same units as the spectrum.
+        The photometric fluxes will be in the same units as the spectrum.
         Ideally, the spectrum should be in microjanskies(lambda) such that
-        the photometric fluxes with be in microjanskies.
+        the photometric fluxes will be in microjanskies.
 
         Returns
         -------
@@ -125,14 +131,30 @@ class Mcsed:
         mags = np.dot(self.spectrum, self.filter_matrix[:, self.filter_flag])
         return mags
 
-    def build_csp(self, theta):
-        '''Build a composite stellar population model for a given star
-        formation history, dust attenuation law, and dust emission law.
+    def set_class_parameters(self, theta):
+        ''' For a given set of model parameters, set the needed class variables
+        related to SFH, dust attenuation, ect.
 
         Input
         -----
         theta : list
             list of input parameters for sfh, dust att., and dust em.
+        '''
+        start_value = 0
+        ######################################################################
+        # STAR FORMATION HISTORY
+        self.sfh_class.set_parameters_from_list(theta, start_value)
+        # Keeping track of theta index for age of model and other classes
+        start_value += self.sfh_class.nparams
+
+        ######################################################################
+        # DUST ATTENUATION
+        self.dust_abs_class.set_parameters_from_list(theta, start_value)
+        start_value += self.dust_abs_class.nparams
+
+    def build_csp(self):
+        '''Build a composite stellar population model for a given star
+        formation history, dust attenuation law, and dust emission law.
 
         Returns
         -------
@@ -141,74 +163,87 @@ class Mcsed:
         mass : float
             Mass for csp given the SFH input
         '''
-        start_value = 0
-        # Set sfh_class parameters from theta and keep track of theta index
-        self.sfh_class.set_parameters_from_list(theta, start_value)
-        start_value += self.sfh_class.nparams
-        # Evaluate sfh_class
         sfh = self.sfh_class.evaluate(self.age_eval)
-        # Get age of model and keep track of theta index
-        ageval = 10**(theta[start_value])
-        start_value += 1
-        # Take only ages < age of galaxy for modeling
-        sel = self.ages <= ageval
-        # SFR interpolated from the finer sfh
-        sfr = np.interp(ageval - self.ages, self.age_eval, sfh)
-        # The weight is time between ages of each SSP
-        weight = np.diff(np.hstack([0, self.ages])) * 1e9 * sfr
-        # ages > ageval have zero weight
+        ageval = self.sfh_class.age
+
+        # ageval sets limit on ssp_ages that are useable in model calculation
+        sel = self.ssp_ages <= ageval
+        # Need star formation rate from observation back to formation
+        sfr = np.interp(ageval - self.ssp_ages, self.age_eval, sfh)
+        # The weight is the time between ages of each SSP
+        weight = np.diff(np.hstack([0, self.ssp_ages])) * 1e9 * sfr
+        # Ages greater than ageval should have zero weight in csp
         weight[~sel] = 0
-        # Cover the two cases where there is a fractional age range or not
-        A = np.nonzero(self.ages <= ageval)[0][-1]
-        B = np.nonzero(self.ages >= ageval)[0][0]
+
+        # Cover the two cases where ssp_ages contains ageval and when not
+        A = np.nonzero(self.ssp_ages <= ageval)[0][-1]
+        B = np.nonzero(self.ssp_ages >= ageval)[0][0]
         if A == B:
             spec_dustfree = np.dot(self.ssp_spectra, weight)
-            mass = np.sum(weight * self.masses)
+            mass = np.sum(weight * self.ssp_masses)
         else:
-            lw = ageval - self.ages[A]
+            lw = ageval - self.ssp_ages[A]
             wei = lw * 1e9 * np.interp(ageval, self.age_eval, sfh)
             weight[B] = wei
             spec_dustfree = np.dot(self.ssp_spectra, weight)
-            mass = np.sum(weight * self.masses)
-        # Set dust attenuation parameters from theta
-        self.dust_abs_class.set_parameters_from_list(theta, start_value)
-        start_value += self.dust_abs_class.nparams
-        # Evaluate dust_abs_class
+            mass = np.sum(weight * self.ssp_masses)
+
+        # Need to correct for dust attenuation
         taulam = self.dust_abs_class.evaluate(self.wave)
         spec_dustobscured = spec_dustfree * np.exp(-1 * taulam)
-        # Redshift
+
+        # Redshift to observed frame
         csp = np.interp(self.wave, self.wave * (1. + self.redshift),
                         spec_dustobscured)
         return csp, mass
 
-    def testbounds(theta):
-        return False
-    
-    
-    def lnprior(theta):
-        flag = testbounds(theta)
-        if flag:
+    def lnprior(self):
+        ''' Simple, uniform prior for input variables
+
+        Returns
+        -------
+        0.0 if all parameters are in bounds, -np.inf if any are out of bounds
+        '''
+        sfh_flag = self.sfh_class.prior()
+        dust_abs_flag = self.dust_abs_class.prior()
+        flag = sfh_flag * dust_abs_flag
+        if not flag:
             return -np.inf
         else:
             return 0.0
-    
-    
-    def lnlike(theta, ages, seds, masses, wave, zobs, y, yerr, filters, sigma_m):
-        flag = testbounds(theta)
-        if flag:
-            return -np.inf, -np.inf
+
+    def lnlike(self):
+        ''' Calculate the log likelihood and return the value and stellar mass
+        of the model
+
+        Returns
+        -------
+        log likelihood, mass : float, float
+            The log likelihood includes a chi2_term and a parameters term.
+            The mass comes from building of the composite stellar population
+        '''
+        self.spectrum, mass = self.build_csp()
+        model_y = self.get_filter_fluxdensities()
+        inv_sigma2 = 1.0 / (self.data_magerrs**2 + (model_y * self.sigma_m)**2)
+        chi2_term = -0.5 * np.sum((self.data_mags - model_y)**2 * inv_sigma2)
+        parm_term = -0.5 * np.sum(np.log(1 / inv_sigma2))
+        return (chi2_term + parm_term, mass)
+
+    def lnprob(self, theta):
+        ''' Calculate the log probabilty and return the value and stellar mass
+        of the model
+
+        Returns
+        -------
+        log prior + log likelihood, mass : float, float
+            The log probability is just the sum of the logs of the prior and
+            likelihood.  The mass comes from the building of the composite
+            stellar population.
+        '''
+        self.set_class_parameters(theta)
+        lp = self.lnprior()
+        if np.isfinite(lp):
+            lnl, mass = self.lnlike()
+            return lp + lnl, mass
         else:
-            spec, mass = build_csp(theta, ages, seds, masses, wave, zobs)
-            model_y = get_filter_fluxdensities(spec, filter_flag, filter_matrix)
-            inv_sigma2 = 1.0/(yerr**2+(model_y*sigma_m)**2)
-            return (-0.5*np.sum((y-model_y)**2*inv_sigma2) 
-                        - 0.5*np.sum(np.log(1/inv_sigma2)), mass)
-    
-    
-    def lnprob(theta, ages, seds, masses, wave, zobs, y, yerr, filters):
-        lp = lnprior(theta)
-        lnl , mass = lnlike(theta, ages, seds, masses, wave, y, yerr, zobs, 
-                            filters)
-        if not np.isfinite(lp):
             return -np.inf, -np.inf
-        return lp+lnl, mass
