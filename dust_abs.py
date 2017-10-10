@@ -49,7 +49,8 @@ class noll:
         D(wave) = frac{E_b (wave,dellam)^2 }{(wave^2-lam0^2)^2
                      + (wave,dellam)^2}
     '''
-    def __init__(self, tau=0.0, delta=0.0, Eb=0.0):
+    def __init__(self, tau=0.0, delta=0.0, Eb=0.0, tau_lims=[-0.2, 5.0],
+                 delta_lims=[-1., 1.], Eb_lims=[-0.2, 6.]):
         ''' Initialize Class
 
         Input
@@ -65,7 +66,18 @@ class noll:
         self.tau = tau
         self.delta = delta
         self.Eb = Eb
+        self.tau_lims = tau_lims
+        self.delta_lims = delta_lims
+        self.Eb_lims = Eb_lims
         self.nparams = 3
+
+    def prior(self):
+        ''' Uniform prior based on boundaries '''
+        tau_flag = (self.tau > self.tau_lims[0])*(self.tau < self.tau_lims[1])
+        delta_flag = ((self.delta > self.delta_lims[0]) *
+                      (self.delta < self.delta_lims[1]))
+        Eb_flag = (self.Eb > self.Eb_lims[0])*(self.Eb < self.Eb_lims[1])
+        return tau_flag * delta_flag * Eb_flag
 
     def set_parameters_from_list(self, input_list, start_value):
         ''' Set parameters from a list and a start_value
