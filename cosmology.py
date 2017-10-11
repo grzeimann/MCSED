@@ -25,11 +25,11 @@ class Cosmology:
         self.omega_m = omega_m
         self.omega_l = omega_l
         self.omega_k = omega_k
-        self.h0 = h0
-        self.c = 2.99792e18
+        self.h0 = h0 * 1e5  # km / s / (10 pc)
+        self.c = 2.99792e8  # km / s
 
     def luminosity_distance(self, z, stepsize=0.001):
-        ''' Calculate the luminosity distance (cm)
+        ''' Calculate the luminosity distance
 
         Inputs
         ------
@@ -41,7 +41,7 @@ class Cosmology:
         Returns
         -------
         d : float
-            Luminosity distance (cm)
+            Luminosity distance (units of 10 pc)
         '''
         zi = np.arange(0., z + stepsize, stepsize)
         E = np.sqrt(self.omega_m * (1 + zi)**3 + self.omega_k * (1 + zi)**2 +
