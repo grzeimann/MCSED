@@ -19,9 +19,10 @@ class double_powerlaw:
 
         SFR(t) = 10**a * ((t/tau)**b + (t/tau)**-c)**-1
     '''
-    def __init__(self, tau=0., a=1., b=1., c=1., age=0., tau_lims=[-3., 1.],
+    def __init__(self, tau=-1., a=2., b=2., c=2., age=1.5, tau_lims=[-3., 1.],
                  a_lims=[-1., 3.], b_lims=[0., 5.], c_lims=[0., 5.],
-                 age_lims=[0., 13.7]):
+                 age_lims=[0., 13.7], tau_delta=0.2, a_delta=0.4, b_delta=0.4,
+                 c_delta=0.4, age_delta=0.2):
         ''' Initialize this class
 
         Input
@@ -52,8 +53,26 @@ class double_powerlaw:
         self.a_lims = a_lims
         self.b_lims = b_lims
         self.c_lims = c_lims
+        self.tau_delta = tau_delta
+        self.a_delta = a_delta
+        self.b_delta = b_delta
+        self.c_delta = c_delta
+        self.age_delta = age_delta
         self.age_lims = age_lims
         self.nparams = 5
+
+    def get_params(self):
+        ''' Return current parameters '''
+        return [self.tau, self.a, self.b, self.c, self.age]
+
+    def get_param_deltas(self):
+        ''' Return current parameter deltas '''
+        return [self.tau_delta, self.a_delta, self.b_delta, self.c_delta,
+                self.age_delta]
+
+    def get_names(self):
+        ''' Return names of each parameter '''
+        return ['$tau_{sfh}$', 'a', 'b', 'c', 'Log Age']
 
     def prior(self):
         ''' Uniform prior based on boundaries '''
