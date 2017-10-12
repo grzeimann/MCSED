@@ -8,14 +8,13 @@
 """
 
 # Fixed metallicity of SSP models
-metallicity = 0.005
+metallicity = 0.0006
 
 # SSP code for models
 ssp = 'fsps'  # 'fsps'
 isochrone = 'padova'  # 'padova', 'basti', 'mist', 'geneva', 'parsec'
 sfh = 'double_powerlaw'
 dustlaw = 'noll'
-
 
 # Dictionaries
 metallicity_dict = {'padova': [0.0002, 0.0003, 0.0004, 0.0005, 0.0006, 0.0008,
