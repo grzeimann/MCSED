@@ -96,13 +96,26 @@ class Mcsed:
         self.sigma_m = sigma_m
         self.nwalkers = nwalkers
         self.nsteps = nsteps
-        self.Dl = cosmology.Cosmology().luminosity_distance(self.redshift)
+        if self.redshift is not None:
+            self.set_new_redshift(self.redshift)
 
         # Set up logging
         self.setup_logging()
 
         # Time array for sfh
         self.age_eval = np.logspace(-3, 2, 2000)
+
+    def set_new_redshift(self, redshift):
+        ''' Setting redshift
+
+        Inputs
+        ------
+        redshift : float
+            Redshift of the source for fitting
+        '''
+        self.redshift = redshift
+        # Need luminosity distance to adjust ssp_spectra from 10pc to Dl
+        self.Dl = cosmology.Cosmology().luminosity_distance(self.redshift)
 
     def setup_logging(self):
         '''Setup Logging for MCSED
