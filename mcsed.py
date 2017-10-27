@@ -22,7 +22,7 @@ import sfh
 import dust_abs
 import cosmology
 import emcee
-import triangle
+import corner
 import time
 
 import numpy as np
@@ -31,10 +31,10 @@ import matplotlib.pyplot as plt
 
 class Mcsed:
     def __init__(self, filter_matrix, ssp_spectra, ssp_ages, ssp_masses,
-                 wavelength, sfh_name, dust_abs_name, data_mags=None,
-                 data_magerrs=None, redshift=None, filter_flag=None,
+                 wave, sfh_name, dust_abs_name, data_fnu=None,
+                 data_fnu_e=None, redshift=None, filter_flag=None,
                  input_spectrum=None, input_params=None, sigma_m=0.02,
-                 nwalkers=40, nsteps=500):
+                 nwalkers=40, nsteps=1000):
         ''' Initialize the Mcsed class.
 
         Init
@@ -48,7 +48,7 @@ class Mcsed:
             ages of the SSP models
         ssp_masses : numpy array (1 dim)
             remnant masses of the SSP models
-        wavelength : numpy array (1 dim)
+        wave : numpy array (1 dim)
             wavelength for SSP models and all model spectra
         sfh_class : class
             This is the input class for sfh.  Each class has a common attribute
@@ -57,9 +57,9 @@ class Mcsed:
             the input of time in units of Gyrs
         dust_abs_class : class
             This is the input class for dust absorption.
-        data_mags : numpy array (1 dim)
+        data_fnu : numpy array (1 dim)
             Photometry for data.  Length = (filter_flag == True).sum()
-        data_magerrs : numpy array (1 dim)
+        data_fnu_e : numpy array (1 dim)
             Photometric errors for data
         redshift : float
             Redshift of the source
@@ -84,11 +84,12 @@ class Mcsed:
         self.ssp_spectra = ssp_spectra
         self.ssp_ages = ssp_ages
         self.ssp_masses = ssp_masses
-        self.wavelength = wavelength
+        self.wave = wave
         self.sfh_class = getattr(sfh, sfh_name)()
         self.dust_abs_class = getattr(dust_abs, dust_abs_name)()
-        self.data_mags = data_mags
-        self.data_magerrs = data_magerrs
+        self.param_classes = ['sfh_class', 'dust_abs_class']
+        self.data_fnu = data_fnu
+        self.data_fnu_e = data_fnu_e
         self.redshift = redshift
         self.filter_flag = filter_flag
         self.input_spectrum = input_spectrum
@@ -103,13 +104,13 @@ class Mcsed:
         self.setup_logging()
 
         # Time array for sfh
-        self.age_eval = np.logspace(-3, 2, 2000)
+        self.age_eval = np.logspace(-3, 1, 4000)
 
     def set_new_redshift(self, redshift):
         ''' Setting redshift
 
-        Inputs
-        ------
+        Parameters
+        ----------
         redshift : float
             Redshift of the source for fitting
         '''
@@ -142,6 +143,12 @@ class Mcsed:
             self.log.setLevel(logging.DEBUG)
             self.log.addHandler(handler)
 
+    def get_filter_wavelengths(self):
+        ''' FILL IN
+        '''
+        wave_avg = np.dot(self.wave, self.filter_matrix[:, self.filter_flag])
+        return wave_avg
+
     def get_filter_fluxdensities(self):
         '''Convert a spectrum to photometric fluxes for a given filter set.
         The photometric fluxes will be in the same units as the spectrum.
@@ -150,11 +157,11 @@ class Mcsed:
 
         Returns
         -------
-        mags : numpy array (1 dim)
-            Photometric magnitudes for an input spectrum
+        f_nu : numpy array (1 dim)
+            Photometric flux densities for an input spectrum
         '''
-        mags = np.dot(self.spectrum, self.filter_matrix[:, self.filter_flag])
-        return mags
+        f_nu = np.dot(self.spectrum, self.filter_matrix[:, self.filter_flag])
+        return f_nu
 
     def set_class_parameters(self, theta):
         ''' For a given set of model parameters, set the needed class variables
@@ -188,14 +195,13 @@ class Mcsed:
         mass : float
             Mass for csp given the SFH input
         '''
-        # TODO include D(z)**2 modification to ssp_spectra
-        sfh = self.sfh_class.evaluate(self.age_eval)
-        ageval = self.sfh_class.age
+        # Need star formation rate from observation back to formation
+        sfr = self.sfh_class.evaluate(self.ssp_ages)
+        ageval = 10**self.sfh_class.age
 
         # ageval sets limit on ssp_ages that are useable in model calculation
         sel = self.ssp_ages <= ageval
-        # Need star formation rate from observation back to formation
-        sfr = np.interp(ageval - self.ssp_ages, self.age_eval, sfh)
+
         # The weight is the time between ages of each SSP
         weight = np.diff(np.hstack([0, self.ssp_ages])) * 1e9 * sfr
         # Ages greater than ageval should have zero weight in csp
@@ -209,20 +215,19 @@ class Mcsed:
             mass = np.sum(weight * self.ssp_masses)
         else:
             lw = ageval - self.ssp_ages[A]
-            wei = lw * 1e9 * np.interp(ageval, self.age_eval, sfh)
+            wei = lw * 1e9 * np.interp(ageval, self.ssp_ages, sfr)
             weight[B] = wei
             spec_dustfree = np.dot(self.ssp_spectra, weight)
             mass = np.sum(weight * self.ssp_masses)
-
         # Need to correct for dust attenuation
         taulam = self.dust_abs_class.evaluate(self.wave)
         spec_dustobscured = spec_dustfree * np.exp(-1 * taulam)
 
         # Redshift to observed frame
         csp = np.interp(self.wave, self.wave * (1. + self.redshift),
-                        spec_dustobscured)
+                        spec_dustobscured * (1. + self.redshift))
         # Correct spectra from 10pc to redshift of the source
-        return csp / (4. * np.pi * self.Dl**2), mass
+        return csp / self.Dl**2, mass
 
     def lnprior(self):
         ''' Simple, uniform prior for input variables
@@ -251,8 +256,8 @@ class Mcsed:
         '''
         self.spectrum, mass = self.build_csp()
         model_y = self.get_filter_fluxdensities()
-        inv_sigma2 = 1.0 / (self.data_magerrs**2 + (model_y * self.sigma_m)**2)
-        chi2_term = -0.5 * np.sum((self.data_mags - model_y)**2 * inv_sigma2)
+        inv_sigma2 = 1.0 / (self.data_fnu_e**2 + (model_y * self.sigma_m)**2)
+        chi2_term = -0.5 * np.sum((self.data_fnu - model_y)**2 * inv_sigma2)
         parm_term = -0.5 * np.sum(np.log(1 / inv_sigma2))
         return (chi2_term + parm_term, mass)
 
@@ -275,7 +280,7 @@ class Mcsed:
         else:
             return -np.inf, -np.inf
 
-    def get_init_walker_values(self):
+    def get_init_walker_values(self, num=None):
         ''' Before running emcee, this function generates starting points
         for each walker in the MCMC process.
 
@@ -294,7 +299,9 @@ class Mcsed:
             init_deltas.append(getattr(self, par_cl).get_param_deltas())
         theta = list(np.hstack(init_params))
         thetae = list(np.hstack(init_deltas))
-        pos = emcee.utils.sample_ball(theta, thetae, size=self.nwalkers)
+        if num is None:
+            num = self.nwalkers
+        pos = emcee.utils.sample_ball(theta, thetae, size=num)
         return pos
 
     def get_param_names(self):
@@ -306,11 +313,38 @@ class Mcsed:
             list of all parameter names
         '''
         names = []
-        param_classes = ['sfh_class', 'dust_abs_class']
-        for par_cl in param_classes:
+        for par_cl in self.param_classes:
             names.append(getattr(self, par_cl).get_names())
         names = list(np.hstack(names))
         return names
+
+    def get_params(self):
+        ''' Grab the the parameters in each class
+
+        Returns
+        -------
+        vals : list
+            list of all parameter values
+        '''
+        vals = []
+        for par_cl in self.param_classes:
+            vals.append(getattr(self, par_cl).get_params())
+        vals = list(np.hstack(vals))
+        return vals
+
+    def get_param_lims(self):
+        ''' Grab the limits of the parameters for making mock galaxies
+
+        Returns
+        -------
+        limits : numpy array (2 dim)
+            an array with parameters for rows and limits for columns
+        '''
+        limits = []
+        for par_cl in self.param_classes:
+            limits.append(getattr(self, par_cl).get_param_lims())
+        limits = np.array(sum(limits, []))
+        return limits
 
     def fit_model(self):
         ''' Using emcee to find parameter estimations for given set of
@@ -319,7 +353,7 @@ class Mcsed:
         # Need to verify data parameters have been set since this is not
         # a necessity on initiation
         self.log.info('Fitting model using emcee')
-        check_vars = ['data_mags', 'data_magerrs', 'redshift', 'filter_flag']
+        check_vars = ['data_fnu', 'data_fnu_e', 'redshift', 'filter_flag']
         for var in check_vars:
             if getattr(self, var) is None:
                 self.error('The variable %s must be set first' % var)
@@ -347,11 +381,12 @@ class Mcsed:
         end = time.time()
         elapsed = end - start
         self.log.info("Total time taken: %0.2f s" % elapsed)
-        self.log.info("Time taken per step: %0.2f ms" %
-                      (elapsed / (initial_steps + self.nsteps)))
+        self.log.info("Time taken per step per walker: %0.2f ms" %
+                      (elapsed / (initial_steps + self.nsteps) * 1000. /
+                       self.nwalkers))
         # Calculate how long the run should last
         tau = np.max(sampler.acor)
-        burnin_step = np.round(tau*5)
+        burnin_step = int(tau*3)
         self.log.info("Mean acceptance fraction: %0.2f" %
                       (np.mean(sampler.acceptance_fraction)))
         self.log.info("AutoCorrelation Steps: %i, Number of Burn-in Steps: %i"
@@ -360,9 +395,53 @@ class Mcsed:
         new_chain[:, :, :-2] = sampler.chain
         for i in xrange(len(sampler.blobs)):
             for j in xrange(len(sampler.blobs[0])):
-                new_chain[j, i, -2] = np.log10(sampler.blobs[i][j])
+                x = sampler.blobs[i][j]
+                new_chain[j, i, -2] = np.where((np.isfinite(x)) * (x > 0.),
+                                               np.log10(x), -99.)
         new_chain[:, :, -1] = sampler.lnprobability
         self.samples = new_chain[:, burnin_step:, :].reshape((-1, ndim+2))
+
+    def spectrum_plot(self, ax, color=[0.465, 0.269, 0.464]):
+        ''' Make spectum plot for current model '''
+        spectrum, mass = self.build_csp()
+        ax.plot(self.wave, spectrum, color=color, alpha=0.2)
+
+    def add_subplots(self, fig, nsamples):
+        ''' Add Subplots to Triangle plot below '''
+        ax1 = fig.add_subplot(3, 1, 1)
+        ax1.set_position([0.7, 0.80, 0.25, 0.15])
+        ax1.set_xscale('log')
+        ax1.set_yscale('log')
+        ax1.set_ylabel(r'SFR $M_{\odot} yr^{-1}$')
+        ax1.set_xlabel('Lookback Time (Gyr)')
+        ax1.set_xlim([10**self.sfh_class.age_lims[0],
+                      10**self.sfh_class.age_lims[1]])
+        ax2 = fig.add_subplot(3, 1, 2)
+        ax2.set_xlim([1000, 20000])
+        ax2.set_ylim([0, 8])
+        ax2.set_xscale('log')
+        ax2.set_position([0.7, 0.60, 0.25, 0.15])
+        ax2.set_ylabel(r'Dust Optical depth')
+        ax2.set_xlabel(r'Wavelength $\AA$')
+        ax3 = fig.add_subplot(3, 1, 3)
+        ax3.set_position([0.4, 0.80, 0.25, 0.15])
+        ax3.set_xlim([3000, 80000])
+        ax3.set_xscale('log')
+        ax3.set_yscale('log')
+        ax3.set_ylim([0.01, 10])
+        ax3.set_xlabel(r'Wavelength $\AA$')
+        ax3.set_ylabel(r'$F_{\nu}$ ($\mu$Jy)')
+        rndsamples = 25
+        for i in np.arange(rndsamples):
+            ind = np.random.randint(0, nsamples.shape[0])
+            self.set_class_parameters(nsamples[ind, :-2])
+            self.sfh_class.plot(ax1)
+            self.dust_abs_class.plot(ax2, self.wave)
+            self.spectrum_plot(ax3)
+        if self.input_params is not None:
+            self.set_class_parameters(self.input_params)
+            self.sfh_class.plot(ax1, color='k')
+            self.dust_abs_class.plot(ax2, self.wave, color='k')
 
     def triangle_plot(self, outname, lnprobcut=7.5):
         ''' Make a triangle corner plot for samples from fit
@@ -381,14 +460,19 @@ class Mcsed:
         chi2sel = (self.samples[:, -1] >
                    (np.max(self.samples[:, -1], axis=0) - lnprobcut))
         nsamples = self.samples[chi2sel, :]
-        names = self.get_param_names()
+        o = 0  # self.sfh_class.nparams
+        names = self.get_param_names()[o:]
         names.append('Log Mass')
-        percentilerange = [0.99] * len(names)
-        fig = triangle.corner(nsamples[:, :-1], labels=names,
-                              range=percentilerange, truths=self.input_params,
-                              label_kwargs={"fontsize": 18}, show_titles=True,
-                              title_kwargs={"fontsize": 16},
-                              quantiles=[0.16, 0.5, 0.84], bins=25)
+        percentilerange = [p for i, p in enumerate(self.get_param_lims())
+                           if i >= o] + [[7, 11]]  # [.97] * len(names)
+        fig = corner.corner(nsamples[:, o:-1], labels=names,
+                            range=percentilerange,
+                            truths=self.input_params[o:],
+                            label_kwargs={"fontsize": 18}, show_titles=True,
+                            title_kwargs={"fontsize": 16},
+                            quantiles=[0.16, 0.5, 0.84], bins=50)
+        # Adding subplots
+        self.add_subplots(fig, nsamples)
         fig.set_size_inches(15.0, 15.0)
-        fig.savefig("triangle_%s.png" % (outname), dpi=150)
+        fig.savefig("%s.png" % (outname), dpi=150)
         plt.close()

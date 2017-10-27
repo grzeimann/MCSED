@@ -15,8 +15,8 @@ import numpy as np
 def calzetti(wave):
     ''' Calzetti et al. (2000) dust attenuation curve, k(wave)
 
-    Input
-    -----
+    Parameters
+    ----------
     wave : numpy array (1 dim)
         wavelength
 
@@ -49,11 +49,12 @@ class noll:
         D(wave) = frac{E_b (wave,dellam)^2 }{(wave^2-lam0^2)^2
                      + (wave,dellam)^2}
     '''
-    def __init__(self, tau=0.0, delta=0.0, Eb=0.0, tau_lims=[-0.2, 5.0],
-                 delta_lims=[-1., 1.], Eb_lims=[-0.2, 6.]):
+    def __init__(self, tau=0.7, delta=0.0, Eb=1.0, tau_lims=[-0.2, 3.0],
+                 delta_lims=[-1., 1.], Eb_lims=[-0.2, 6.], tau_delta=0.2,
+                 delta_delta=0.2, Eb_delta=0.4):
         ''' Initialize Class
 
-        Input
+        Parameters
         -----
         tau : float
             Effective depth, e.g., Observed = True * exp**(-tau/4.05 * k(wave))
@@ -69,7 +70,26 @@ class noll:
         self.tau_lims = tau_lims
         self.delta_lims = delta_lims
         self.Eb_lims = Eb_lims
+        self.tau_delta = tau_delta
+        self.delta_delta = delta_delta
+        self.Eb_delta = Eb_delta
         self.nparams = 3
+
+    def get_params(self):
+        ''' Return current parameters '''
+        return [self.tau, self.delta, self.Eb]
+
+    def get_param_lims(self):
+        ''' Return current parameter limits '''
+        return [self.tau_lims, self.delta_lims, self.Eb_lims]
+
+    def get_param_deltas(self):
+        ''' Return current parameter deltas '''
+        return [self.tau_delta, self.delta_delta, self.Eb_delta]
+
+    def get_names(self):
+        ''' Return names of each parameter '''
+        return ['$tau_{dust}$', '$\delta$', '$E_b$']
 
     def prior(self):
         ''' Uniform prior based on boundaries '''
@@ -82,8 +102,8 @@ class noll:
     def set_parameters_from_list(self, input_list, start_value):
         ''' Set parameters from a list and a start_value
 
-        Input
-        -----
+        Parameters
+        ----------
         input_list : list
             list of input parameters (could be much larger than number of
             parameters to be set)
@@ -94,11 +114,16 @@ class noll:
         self.delta = input_list[start_value+1]
         self.Eb = input_list[start_value+2]
 
+    def plot(self, ax, wave, color=[0/255., 175/255., 202/255.]):
+        ''' Plot Dust Law for given set of parameters '''
+        dust = self.evaluate(wave)
+        ax.plot(wave, dust, color=color, alpha=0.4)
+
     def evaluate(self, wave):
         ''' Evaluate Dust Law
 
-        Input
-        -----
+        Parameters
+        ----------
         wave : numpy array (1 dim)
             wavelength
 

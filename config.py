@@ -14,24 +14,13 @@ metallicity = 0.0006
 ssp = 'fsps'  # 'fsps'
 isochrone = 'padova'  # 'padova', 'basti', 'mist', 'geneva', 'parsec'
 sfh = 'double_powerlaw'
-dustlaw = 'noll'
+dust_law = 'noll'
 
 # Dictionaries
 metallicity_dict = {'padova': [0.0002, 0.0003, 0.0004, 0.0005, 0.0006, 0.0008,
                                0.0010, 0.0012, 0.0016, 0.0020, 0.0025, 0.0031,
                                0.0039, 0.0049, 0.0061, 0.0077, 0.0096, 0.0120,
                                0.0150, 0.0190, 0.0240, 0.0300]}
-
-# Mock Galaxies
-mock_mass = [7.5, 10.5]  # Range of masses to explore in tests
-mock_redhsift = [1.9, 2.35]  # Range of redshift ranges to explore in tests
-mock_dust_tau = [0.0, 2.0]  # optical depth in V band
-mock_dust_delta = [-1., 1.]  # calzetti = 0.0, pure-grey = 1.0
-mock_dust_bump = [0.0, 5.0]  # MW = 4.1, calzetti = 0.0
-mock_sfh_tau = [-3.0, 1.0]  # Log Gyr
-mock_sfh_a = [-1., 3.]
-mock_sfh_b = [0., 5.]
-mock_sfh_c = [0., 5.]
 
 # FILTERS
 

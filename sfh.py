@@ -10,6 +10,7 @@
 """
 
 import numpy as np
+from cosmology import Cosmology
 
 
 class double_powerlaw:
@@ -19,14 +20,14 @@ class double_powerlaw:
 
         SFR(t) = 10**a * ((t/tau)**b + (t/tau)**-c)**-1
     '''
-    def __init__(self, tau=-1., a=2., b=2., c=2., age=1.5, tau_lims=[-3., 1.],
-                 a_lims=[-1., 3.], b_lims=[0., 5.], c_lims=[0., 5.],
-                 age_lims=[0., 13.7], tau_delta=0.2, a_delta=0.4, b_delta=0.4,
-                 c_delta=0.4, age_delta=0.2):
+    def __init__(self, tau=-2.2, a=2., b=2., c=1., age=-.5, tau_lims=[-3., 1.],
+                 a_lims=[-1., 5.], b_lims=[0., 5.], c_lims=[0., 5.],
+                 age_lims=[-3., 0.4], tau_delta=0.2, a_delta=0.3, b_delta=0.3,
+                 c_delta=0.3, age_delta=0.2):
         ''' Initialize this class
 
-        Input
-        -----
+        Parameters
+        ----------
         tau : float
             The inflection point between a rising SFR and a declining SFR
         a : float
@@ -61,9 +62,20 @@ class double_powerlaw:
         self.age_lims = age_lims
         self.nparams = 5
 
+    def set_agelim(self, redshift):
+        ''' Set the Age limit based on age of the universe '''
+        C = Cosmology()
+        self.age_lims[1] = np.log10(C.lookback_time(20.) -
+                                    C.lookback_time(redshift))
+
     def get_params(self):
         ''' Return current parameters '''
         return [self.tau, self.a, self.b, self.c, self.age]
+
+    def get_param_lims(self):
+        ''' Return current parameters '''
+        return [self.tau_lims, self.a_lims, self.b_lims, self.c_lims,
+                self.age_lims]
 
     def get_param_deltas(self):
         ''' Return current parameter deltas '''
@@ -86,8 +98,8 @@ class double_powerlaw:
     def set_parameters_from_list(self, input_list, start_value):
         ''' Set parameters from a list and a start_value
 
-        Input
-        -----
+        Parameters
+        ----------
         input_list : list
             list of input parameters (could be much larger than number of
             parameters to be set)
@@ -100,11 +112,17 @@ class double_powerlaw:
         self.c = input_list[start_value+3]
         self.age = input_list[start_value+4]
 
+    def plot(self, ax, color=[238/255., 90/255., 18/255.]):
+        ''' Plot SFH for given set of parameters '''
+        t = np.logspace(self.age_lims[0], self.age)
+        sfr = self.evaluate(t)
+        ax.plot(t, sfr, color=color, alpha=0.4)
+
     def evaluate(self, t):
         ''' Evaluate double power law SFH
 
-        Input
-        -----
+        Parameters
+        ----------
         t : numpy array (1 dim)
             time in Gyr
 
@@ -113,28 +131,7 @@ class double_powerlaw:
         msfr : numpy array (1 dim)
             Star formation rate at given time in time array
         '''
-        msfr = (10**(self.a) * ((t/self.tau)**self.b +
-                                (t/self.tau)**(-self.c))**(-1))
+        t1 = 10**self.tau
+        msfr = (10**(self.a) * ((t / t1)**self.b +
+                                (t / t1)**(-self.c))**(-1))
         return msfr
-
-
-class constant:
-    def __init__(self, a=1.):
-        self.a = a
-        self.nparams = 1
-
-    def set_parameters_from_list(self, input_list, start_value):
-        ''' Set parameters from a list and a start_value
-
-        Input
-        -----
-        input_list : list
-            list of input parameters (could be much larger than number of
-            parameters to be set)
-        start_value : int
-            initial index from list to read out parameters
-        '''
-        self.a = input_list[start_value]
-
-    def evaluate(self, t):
-        return self.a * np.ones(t.shape)
