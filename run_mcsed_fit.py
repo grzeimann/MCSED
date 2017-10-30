@@ -181,8 +181,9 @@ def read_input_file(args):
     flag : numpy array (2 dim)
         Flag set to True for filters in the catalog_filter_dict in config.py
     '''
-    F = np.loadtxt(args.filename)
-    nobj = F.shape[0]
+    F = np.loadtxt(args.filename, dtype={'names': ('field', 'id', 'z'),
+                                         'formats': ('S6', 'i4', 'f4')})
+    nobj = len(F['field'])
     fields = ['aegis', 'cosmos', 'goodsn', 'goodss', 'uds']
     name_base = '_3dhst.v4.1.cat.FITS'
     field_dict = {}
@@ -193,23 +194,36 @@ def read_input_file(args):
     y = np.zeros((nobj, nfilters))
     yerr = np.zeros((nobj, nfilters))
     flag = np.zeros((nobj, nfilters), dtype=bool)
-    z = F[:, 2]
+    z = F['z']
     # convert from mag_zp = 25 to microjanskies (mag_zp = 23.9)
     fac = 10**(-0.4*(25.0-23.9))
     for i, datum in enumerate(F):
         loc = datum[0].lower()
         for j, ind in enumerate(args.filt_dict.keys()):
-            colname = "f_"+args.catalog_filter_dict[ind]
-            ecolname = "e_"+args.catalog_filter_dict[ind]
-            if colname in field_dict[loc].columns.names:
-                y[i, j] = field_dict[loc].data[colname][int(datum[1])]*fac
-                yerr[i, j] = field_dict[loc].data[ecolname][int(datum[1])]*fac
-                flag[i, j] = True
+            if ind in args.catalog_filter_dict[loc].keys():
+                colname = "f_"+args.catalog_filter_dict[loc][ind]
+                ecolname = "e_"+args.catalog_filter_dict[loc][ind]
             else:
                 y[i, j] = 0.0
                 yerr[i, j] = 0.0
                 flag[i, j] = False
-    return y, yerr, z, flag
+                continue
+            if colname in field_dict[loc].columns.names:
+                fi = field_dict[loc].data[colname][int(datum[1])]
+                fie = field_dict[loc].data[ecolname][int(datum[1])]
+                if (fi > 0.0) and ((fi / fie) > 1.):
+                    y[i, j] = fi*fac
+                    yerr[i, j] = fie*fac
+                    flag[i, j] = True
+                else:
+                    y[i, j] = 0.0
+                    yerr[i, j] = 0.0
+                    flag[i, j] = False
+            else:
+                y[i, j] = 0.0
+                yerr[i, j] = 0.0
+                flag[i, j] = False
+    return y, yerr, z, flag, F['id'], F['field']
 
 
 def draw_uniform_dist(nsamples, start, end):
@@ -254,7 +268,7 @@ def draw_gaussian_dist(nsamples, means, sigmas):
     return sigmas * N + means
 
 
-def mock_data(args, mcsed_model, nsamples=5, phot_error=0.1):
+def mock_data(args, mcsed_model, nsamples=20, phot_error=0.1):
     ''' Create mock data to test quality of MCSED fits
 
     Parameters
@@ -279,27 +293,19 @@ def mock_data(args, mcsed_model, nsamples=5, phot_error=0.1):
     # Build fake theta, set z, mass, age to get sfh_a
     thetas = mcsed_model.get_init_walker_values(num=nsamples)
     zobs = draw_uniform_dist(nsamples, 1.9, 2.35)
-    params, y, yerr = [], [], []
+    params, y, yerr, true_y = [], [], [], []
     for theta, z in zip(thetas, zobs):
         mcsed_model.set_class_parameters(theta)
         mcsed_model.set_new_redshift(z)
         mcsed_model.spectrum, mass = mcsed_model.build_csp()
         f_nu = mcsed_model.get_filter_fluxdensities()
         f_nu_e = f_nu * phot_error
-        y.append(f_nu)
+        y.append(f_nu_e*np.random.randn(len(f_nu)) + f_nu)
         yerr.append(f_nu_e)
+        true_y.append(f_nu)
         params.append(list(theta) + [np.log10(mass)])
-        #wv = mcsed_model.get_filter_wavelengths()
-        #import matplotlib.pyplot as plt
-        #plt.plot(mcsed_model.wave, mcsed_model.spectrum)
-        #plt.scatter(wv, f_nu, color='r')
-        #plt.axis([4000,30000,0.01,100])
-        #plt.xscale('log')
-        #plt.yscale('log')
-        #plt.savefig('test.png')
-        #import sys
-        #sys.exit(1)
-    return y, yerr, zobs, params
+
+    return y, yerr, zobs, params, true_y
 
 
 def main(argv=None):
@@ -318,19 +324,29 @@ def main(argv=None):
 
     if args.test:
         mcsed_model.filter_flag = get_test_filters(args)
-        y, yerr, z, truth = mock_data(args, mcsed_model)
+        y, yerr, z, truth, true_y = mock_data(args, mcsed_model)
         cnt = 0
-        for yi, ye, zi, tr in zip(y, yerr, z, truth):
+        for yi, ye, zi, tr, ty in zip(y, yerr, z, truth, true_y):
             mcsed_model.input_params = tr
             mcsed_model.set_class_parameters(tr[:-1])
             mcsed_model.data_fnu = yi
             mcsed_model.data_fnu_e = ye
+            mcsed_model.true_fnu = ty
             mcsed_model.set_new_redshift(zi)
             mcsed_model.fit_model()
             mcsed_model.triangle_plot('output/triangle_fake_%04d' % cnt)
             cnt += 1
     else:
-        y, yerr, z, flag = read_input_file(args)
+        y, yerr, z, flag, objid, field = read_input_file(args)
+        iv = mcsed_model.get_params()
+        for yi, ye, zi, fl, oi, fd in zip(y, yerr, z, flag, objid, field):
+            mcsed_model.filter_flag = fl
+            mcsed_model.set_class_parameters(iv)
+            mcsed_model.data_fnu = yi[fl]
+            mcsed_model.data_fnu_e = ye[fl]
+            mcsed_model.set_new_redshift(zi)
+            mcsed_model.fit_model()
+            mcsed_model.triangle_plot('output/triangle_%s_%04d' % (fd, oi))
 
 
 if __name__ == '__main__':

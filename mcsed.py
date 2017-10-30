@@ -34,7 +34,7 @@ class Mcsed:
                  wave, sfh_name, dust_abs_name, data_fnu=None,
                  data_fnu_e=None, redshift=None, filter_flag=None,
                  input_spectrum=None, input_params=None, sigma_m=0.02,
-                 nwalkers=40, nsteps=1000):
+                 nwalkers=40, nsteps=1000, true_fnu=None):
         ''' Initialize the Mcsed class.
 
         Init
@@ -97,6 +97,7 @@ class Mcsed:
         self.sigma_m = sigma_m
         self.nwalkers = nwalkers
         self.nsteps = nsteps
+        self.true_fnu = true_fnu
         if self.redshift is not None:
             self.set_new_redshift(self.redshift)
 
@@ -401,7 +402,7 @@ class Mcsed:
         new_chain[:, :, -1] = sampler.lnprobability
         self.samples = new_chain[:, burnin_step:, :].reshape((-1, ndim+2))
 
-    def spectrum_plot(self, ax, color=[0.465, 0.269, 0.464]):
+    def spectrum_plot(self, ax, color=[0.996, 0.702, 0.031]):
         ''' Make spectum plot for current model '''
         spectrum, mass = self.build_csp()
         ax.plot(self.wave, spectrum, color=color, alpha=0.2)
@@ -424,11 +425,9 @@ class Mcsed:
         ax2.set_ylabel(r'Dust Optical depth')
         ax2.set_xlabel(r'Wavelength $\AA$')
         ax3 = fig.add_subplot(3, 1, 3)
-        ax3.set_position([0.4, 0.80, 0.25, 0.15])
+        ax3.set_position([0.38, 0.80, 0.25, 0.15])
         ax3.set_xlim([3000, 80000])
         ax3.set_xscale('log')
-        ax3.set_yscale('log')
-        ax3.set_ylim([0.01, 10])
         ax3.set_xlabel(r'Wavelength $\AA$')
         ax3.set_ylabel(r'$F_{\nu}$ ($\mu$Jy)')
         rndsamples = 25
@@ -442,6 +441,18 @@ class Mcsed:
             self.set_class_parameters(self.input_params)
             self.sfh_class.plot(ax1, color='k')
             self.dust_abs_class.plot(ax2, self.wave, color='k')
+        wv = self.get_filter_wavelengths()
+        if self.true_fnu is not None:
+            p = ax3.scatter(wv, self.true_fnu, marker='o', s=25,
+                            color=[0.216, 0.471, 0.749], zorder=9)
+            p.set_facecolor('none')
+        ax3.errorbar(wv, self.data_fnu, yerr=self.data_fnu_e, fmt='s',
+                     fillstyle='none', markersize=2,
+                     color=[0.510, 0.373, 0.529], zorder=10)
+        ax3min = self.data_fnu.min()
+        ax3max = self.data_fnu.max()
+        ax3ran = ax3max - ax3min
+        ax3.set_ylim([ax3min - 0.2 * ax3ran, ax3max + 0.2 * ax3ran])
 
     def triangle_plot(self, outname, lnprobcut=7.5):
         ''' Make a triangle corner plot for samples from fit
@@ -460,14 +471,18 @@ class Mcsed:
         chi2sel = (self.samples[:, -1] >
                    (np.max(self.samples[:, -1], axis=0) - lnprobcut))
         nsamples = self.samples[chi2sel, :]
-        o = 0  # self.sfh_class.nparams
+        o = self.sfh_class.nparams
         names = self.get_param_names()[o:]
         names.append('Log Mass')
+        if self.input_params is not None:
+            truths = self.input_params[o:]
+        else:
+            truths = None
         percentilerange = [p for i, p in enumerate(self.get_param_lims())
                            if i >= o] + [[7, 11]]  # [.97] * len(names)
         fig = corner.corner(nsamples[:, o:-1], labels=names,
                             range=percentilerange,
-                            truths=self.input_params[o:],
+                            truths=truths,
                             label_kwargs={"fontsize": 18}, show_titles=True,
                             title_kwargs={"fontsize": 16},
                             quantiles=[0.16, 0.5, 0.84], bins=50)

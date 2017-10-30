@@ -26,7 +26,7 @@ class Cosmology:
         self.omega_l = omega_l
         self.omega_k = omega_k
         self.H_0 = H_0  # km / s / (10 pc)
-        self.t_h = 9.78 * (100. / self. H_0) # Gyr
+        self.t_h = 9.78 * (100. / self. H_0)  # Gyr
         self.c = 2.99792e5  # km / s
 
     def luminosity_distance(self, z, stepsize=0.001):

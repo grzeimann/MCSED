@@ -59,9 +59,7 @@ def read_fsps(args):
         print(']')
         sys.exit(1)
     cnt = 0
-    ages = []
-    masses = []
-    spec = []
+    ages, masses, spec = [], [], []
     with open(filename) as f:
         for lines in f:
             if cnt == 9:
