@@ -9,6 +9,7 @@ Single Stellar Population module for loading models
 import os.path as op
 import numpy as np
 import sys
+import sfh
 
 
 def read_ssp(args):
@@ -22,6 +23,36 @@ def read_ssp(args):
     '''
     if args.ssp.lower() == 'fsps':
         return read_fsps(args)
+
+
+def get_coarser_wavelength_fsps(wave, spec):
+    sel = np.where((wave > 500) * (wave < 1e5))[0]
+    spec = spec[sel, :]
+    wave = wave[sel]
+    nsel = np.where(np.abs(np.diff(wave)-0.9) < 0.5)[0]
+    ndw = 8.
+    nw = np.arange(wave[nsel[0]], wave[nsel[-1]+1], ndw)
+    nwb = np.hstack([nw, wave[nsel[-1]+1]])
+    nwave = np.hstack([wave[:nsel[0]], nw, wave[(nsel[-1]+1):]])
+    nspec = np.zeros((len(nwave), spec.shape[1]))
+    for i, sp in enumerate(spec.swapaxes(0, 1)):
+        hsp = (np.histogram(wave[nsel], nwb, weights=sp[nsel])[0] /
+               np.histogram(wave[nsel], nwb)[0])
+        nspec[:, i] = np.hstack([sp[:nsel[0]], hsp, sp[(nsel[-1]+1):]])
+    return nwave, nspec
+
+
+def bin_ages_fsps(args, ages, spec):
+    sfh_class = getattr(sfh, args.sfh)()
+    sel = ages >= 6.
+    ages, spec = (ages[sel], spec[:, sel])
+    weight = np.diff(np.hstack([0., 10**ages]))
+    agebin = np.hstack([0., sfh_class.ages])
+    nspec = np.zeros((spec.shape[0], len(sfh_class.ages)))
+    for i in np.arange(len(sfh_class.ages)):
+        sel = np.where((ages >= agebin[i]) * (ages < agebin[i+1]))[0]
+        nspec[:, i] = np.dot(spec[:, sel], weight[sel]) / weight[sel].sum()
+    return np.array(sfh_class.ages), nspec
 
 
 def read_fsps(args):
@@ -72,17 +103,10 @@ def read_fsps(args):
                 else:
                     spec.append(np.array(l, dtype=float) * solar_microjansky)
             cnt += 1
-    sel = np.where((wave > 500) * (wave < 1e5))[0]
-    spec = np.array(spec).swapaxes(0, 1)[sel, :]
-    wave = wave[sel]
-    nsel = np.where(np.abs(np.diff(wave)-0.9) < 0.5)[0]
-    ndw = 8.
-    nw = np.arange(wave[nsel[0]], wave[nsel[-1]+1], ndw)
-    nwb = np.hstack([nw, wave[nsel[-1]+1]])
-    nwave = np.hstack([wave[:nsel[0]], nw, wave[(nsel[-1]+1):]])
-    nspec = np.zeros((len(nwave), spec.shape[1]))
-    for i, sp in enumerate(spec.swapaxes(0, 1)):
-        hsp = (np.histogram(wave[nsel], nwb, weights=sp[nsel])[0] /
-               np.histogram(wave[nsel], nwb)[0])
-        nspec[:, i] = np.hstack([sp[:nsel[0]], hsp, sp[(nsel[-1]+1):]])
-    return (10**(np.array(ages)-9.), 10**np.array(masses), nwave, nspec)
+    spec = np.array(spec).swapaxes(0, 1)
+    ages = np.array(ages)
+    wave, spec = get_coarser_wavelength_fsps(wave, spec)
+    if args.sfh == 'empirical':
+        ages, spec = bin_ages_fsps(args, ages, spec)
+    # Total mass including remnants, so set to 1.
+    return 10**(ages-9), np.ones(ages.shape), wave, spec

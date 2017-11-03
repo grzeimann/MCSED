@@ -118,6 +118,7 @@ class Mcsed:
         self.redshift = redshift
         # Need luminosity distance to adjust ssp_spectra from 10pc to Dl
         self.Dl = cosmology.Cosmology().luminosity_distance(self.redshift)
+        self.sfh_class.set_agelim(self.redshift)
 
     def setup_logging(self):
         '''Setup Logging for MCSED
@@ -220,6 +221,7 @@ class Mcsed:
             weight[B] = wei
             spec_dustfree = np.dot(self.ssp_spectra, weight)
             mass = np.sum(weight * self.ssp_masses)
+
         # Need to correct for dust attenuation
         taulam = self.dust_abs_class.evaluate(self.wave)
         spec_dustobscured = spec_dustfree * np.exp(-1 * taulam)
@@ -228,6 +230,7 @@ class Mcsed:
         csp = np.interp(self.wave, self.wave * (1. + self.redshift),
                         spec_dustobscured * (1. + self.redshift))
         # Correct spectra from 10pc to redshift of the source
+
         return csp / self.Dl**2, mass
 
     def lnprior(self):
@@ -397,7 +400,7 @@ class Mcsed:
         for i in xrange(len(sampler.blobs)):
             for j in xrange(len(sampler.blobs[0])):
                 x = sampler.blobs[i][j]
-                new_chain[j, i, -2] = np.where((np.isfinite(x)) * (x > 0.),
+                new_chain[j, i, -2] = np.where((np.isfinite(x)) * (x > 10.),
                                                np.log10(x), -99.)
         new_chain[:, :, -1] = sampler.lnprobability
         self.samples = new_chain[:, burnin_step:, :].reshape((-1, ndim+2))
@@ -417,6 +420,7 @@ class Mcsed:
         ax1.set_xlabel('Lookback Time (Gyr)')
         ax1.set_xlim([10**self.sfh_class.age_lims[0],
                       10**self.sfh_class.age_lims[1]])
+        ax1.set_ylim([1e-5, 1e3])
         ax2 = fig.add_subplot(3, 1, 2)
         ax2.set_xlim([1000, 20000])
         ax2.set_ylim([0, 8])
@@ -479,13 +483,14 @@ class Mcsed:
         else:
             truths = None
         percentilerange = [p for i, p in enumerate(self.get_param_lims())
-                           if i >= o] + [[7, 11]]  # [.97] * len(names)
+                           if i >= o] + [[7, 11]]
+        percentilerange = [.99] * len(names)
         fig = corner.corner(nsamples[:, o:-1], labels=names,
                             range=percentilerange,
                             truths=truths,
                             label_kwargs={"fontsize": 18}, show_titles=True,
                             title_kwargs={"fontsize": 16},
-                            quantiles=[0.16, 0.5, 0.84], bins=50)
+                            quantiles=[0.16, 0.5, 0.84], bins=10)
         # Adding subplots
         self.add_subplots(fig, nsamples)
         fig.set_size_inches(15.0, 15.0)

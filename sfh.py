@@ -135,3 +135,102 @@ class double_powerlaw:
         msfr = (10**(self.a) * ((t / t1)**self.b +
                                 (t / t1)**(-self.c))**(-1))
         return msfr
+
+
+class empirical:
+    ''' The empirical SFH includes 6 bins of SFR at discrete time intervals '''
+    def __init__(self, init_log_sfr=0., init_log_sfr_lims=[-5., 3.],
+                 init_log_sfr_delta=0.5, ages=[7., 8., 8.5, 9., 9.6]):
+        ''' Initialize this class
+
+        Parameters
+        ----------
+        TODO Fill these in
+        '''
+        self.ages = ages
+        self.nparams = len(self.ages)
+        self.nums = np.arange(1, self.nparams+1, dtype=int)
+        for num in self.nums:
+            setattr(self, 'sfr_' + str(num), init_log_sfr)
+            setattr(self, 'sfr_' + str(num) + '_lims', init_log_sfr_lims)
+            setattr(self, 'sfr_' + str(num) + '_delta', init_log_sfr_delta)
+        self.age_lims = [-3., self.ages[-1]-9.]
+
+    def set_agelim(self, redshift):
+        ''' Set the Age limit based on age of the universe '''
+        C = Cosmology()
+        self.age = np.log10(C.lookback_time(20.) -
+                            C.lookback_time(redshift))
+
+    def get_params(self):
+        ''' Return current parameters '''
+        l = []
+        for num in self.nums:
+            l.append(getattr(self, 'sfr_' + str(num)))
+        return l
+
+    def get_param_lims(self):
+        ''' Return current parameters limits '''
+        l = []
+        for num in self.nums:
+            l.append(getattr(self, 'sfr_' + str(num) + '_lims'))
+        return l
+
+    def get_param_deltas(self):
+        ''' Return current parameter deltas '''
+        l = []
+        for num in self.nums:
+            l.append(getattr(self, 'sfr_' + str(num) + '_delta'))
+        return l
+
+    def get_names(self):
+        ''' Return names of each parameter '''
+        l = []
+        for num in self.nums:
+            l.append('sfr_' + str(num))
+        return l
+
+    def prior(self):
+        ''' Uniform prior based on boundaries '''
+        flag = True
+        for num in self.nums:
+            val = getattr(self, 'sfr_' + str(num))
+            lims = getattr(self, 'sfr_' + str(num) + '_lims')
+            flag *= ((val > lims[0]) * (val < lims[1]))
+        return flag
+
+    def set_parameters_from_list(self, input_list, start_value):
+        ''' Set parameters from a list and a start_value
+
+        Parameters
+        ----------
+        input_list : list
+            list of input parameters (could be much larger than number of
+            parameters to be set)
+        start_value : int
+            initial index from list to read out parameters
+        '''
+        for num in self.nums:
+            setattr(self, 'sfr_' + str(num), input_list[start_value + num - 1])
+
+    def plot(self, ax, color=[238/255., 90/255., 18/255.]):
+        ''' Plot SFH for given set of parameters '''
+        t = np.array([6] + self.ages) - 9.
+        sfr = self.evaluate(t)
+        ax.step(10**t, np.hstack([sfr[0], sfr]), where='pre',
+                color=color, alpha=0.4)
+
+    def evaluate(self, t):
+        ''' Evaluate double power law SFH
+
+        Parameters
+        ----------
+        t : numpy array (1 dim)
+            time in Gyr
+
+        Returns
+        -------
+        msfr : numpy array (1 dim)
+            Star formation rate at given time in time array
+        '''
+        return [10**p for p in self.get_params()]

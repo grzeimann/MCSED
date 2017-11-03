@@ -79,6 +79,10 @@ def parse_args(argv=None):
                         help='''Test script with fake data''',
                         action="count", default=0)
 
+    parser.add_argument("-tf", "--test_field",
+                        help='''Test filters will match the given field''',
+                        type=str, default='cosmos')
+
     args = parser.parse_args(args=argv)
 
     # Use config values if none are set in the input
@@ -89,8 +93,8 @@ def parse_args(argv=None):
 
     # Copy list of config values to the args class
     config_copy_list = ['metallicity_dict', 'filt_dict', 'catalog_filter_dict',
-                        'test_filter_dict', 'filter_matrix_name', 'sfh',
-                        'dust_law']
+                        'filter_matrix_name', 'sfh', 'dust_law',
+                        'metallicity_mass_relationship']
 
     for con_copy in config_copy_list:
         setattr(args, con_copy, getattr(config, con_copy))
@@ -154,7 +158,7 @@ def get_test_filters(args):
     nfilters = len(args.filt_dict)
     filter_flag = np.zeros((nfilters,), dtype=bool)
     for i in args.filt_dict.keys():
-        if i in args.test_filter_dict:
+        if i in args.catalog_filter_dict[args.test_field]:
             filter_flag[i] = True
     return filter_flag
 
@@ -211,7 +215,7 @@ def read_input_file(args):
             if colname in field_dict[loc].columns.names:
                 fi = field_dict[loc].data[colname][int(datum[1])]
                 fie = field_dict[loc].data[ecolname][int(datum[1])]
-                if (fi > 0.0) and ((fi / fie) > 1.):
+                if (fi > -99.):
                     y[i, j] = fi*fac
                     yerr[i, j] = fie*fac
                     flag[i, j] = True
@@ -268,7 +272,7 @@ def draw_gaussian_dist(nsamples, means, sigmas):
     return sigmas * N + means
 
 
-def mock_data(args, mcsed_model, nsamples=20, phot_error=0.1):
+def mock_data(args, mcsed_model, nsamples=20, phot_error=0.2):
     ''' Create mock data to test quality of MCSED fits
 
     Parameters

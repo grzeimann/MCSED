@@ -74,6 +74,7 @@ class noll:
         self.delta_delta = delta_delta
         self.Eb_delta = Eb_delta
         self.nparams = 3
+        self.calz = None
 
     def get_params(self):
         ''' Return current parameters '''
@@ -134,8 +135,10 @@ class noll:
         '''
         dellam = 350.
         lam0 = 2175.
+        if self.calz is None:
+            self.calz = calzetti(wave)
         Dlam = (self.Eb * (wave*dellam)**2 /
                           ((wave**2-lam0**2)**2+(wave*dellam)**2))
         taulam = (self.tau / 4.05 *
-                  (calzetti(wave)+Dlam)*(wave/5500)**(self.delta))
+                  (self.calz+Dlam)*(wave/5500)**(self.delta))
         return taulam
