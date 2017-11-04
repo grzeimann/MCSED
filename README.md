@@ -58,7 +58,9 @@ The call would look like:
         python run_mcsed.py -f PATH/FILENAME 
         
 The output of such a call is located in "outputs" and includes a figure like this:
-![alt text](https://github.com/grzeimann/MCSED/edit/master/example_triangle.png)
+<p align="center">
+  <img src="https://github.com/grzeimann/MCSED/edit/master/example_triangle.png" width="350"/>
+</p>
 
 ## Authors
 
