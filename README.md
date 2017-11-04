@@ -59,7 +59,7 @@ The call would look like:
         
 The output of such a call is located in "outputs" and includes a figure like this:
 <p align="center">
-  <img src="https://github.com/grzeimann/MCSED/edit/master/example_triangle.png" width="350"/>
+  <img src="example_triangle.png" width="350"/>
 </p>
 
 ## Authors
