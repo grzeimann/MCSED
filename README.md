@@ -35,7 +35,7 @@ And you will find a help menu like this.
         
 All of the available options for MCSED are found in config.py.  Here we break down the most important of those.  At the top, there are four key variables:
 
-    ssp = 'fsps'  # 'fsps'
-    isochrone = 'padova'  # 'padova', 'basti', 'mist', 'geneva', 'parsec'
+        ssp = 'fsps'  # 'fsps'
+        isochrone = 'padova'  # 'padova', 'basti', 'mist', 'geneva', 'parsec'
 sfh = 'empirical'  # 'double_powerlaw', 'empirical'
 dust_law = 'noll'  # 'noll'
