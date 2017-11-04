@@ -43,12 +43,23 @@ All of the available options for MCSED are found in [config.py](https://github.c
 
 The single stellar population (SSP) model is left flexible in MCSED as it has a strong weight on the inferred parameters.  We also allow the user to define the isochrone applied within a given SSP model.  To build a composite stellar population the user can set the type of star formation history as well as dust attenuation law to go from instrinsic emission to observed flux.  We are still in the early phases of development and so not many options for either of these four key variables are available.  However, as these are flexible and modular in nature, we expect this to have a great impact on any experimental design.
 
-Another key feature in SED fitting is the metallicity of the SSPs.  We offer two options: fixed metallicity or a relationship between stellar mass and stellar metallicty as given by [Ma et al. (2016)](http://adsabs.harvard.edu/abs/2016MNRAS.456.2140M). (NOTE: only fixed metallicity is currently available.
+Another key feature in SED fitting is the metallicity of the SSPs.  We offer two options: fixed metallicity or a relationship between stellar mass and stellar metallicty as given by [Ma et al. (2016)](http://adsabs.harvard.edu/abs/2016MNRAS.456.2140M). (NOTE: only fixed metallicity is currently available.)
 
         # Use metallicity-mass relationship from Ma et al. 2016
         metallicity_mass_relationship = False  # set to True for this option
         # Fixed metallicity of SSP models if fit_metallicity is False
         metallicity = 0.0006  # for fixed metallicity
+
+To run MCSED for a set of objects, simply input a file that has the format: FIELD ID REDSHIFT
+
+        COSMOS   18945  2.188
+        COSMOS   13104  2.292
+
+The call would look like:
+
+        python run_mcsed.py -f PATH/FILENAME 
+        
+The output of such a call is located in "outputs" and includes a figure like this:
 
 
 ## Authors
