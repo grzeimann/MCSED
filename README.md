@@ -27,7 +27,7 @@ usage: run_mcsed_fit.py [-h] [-f FILENAME] [-s SSP] [-z METALLICITY]
 MCSED
 
 optional arguments:
-  -h, --help            show this help message and exit
+    -h, --help            show this help message and exit
   
   -f FILENAME, --filename FILENAME
   
