@@ -14,7 +14,7 @@ git clone https://github.com/grzeimann/MCSED.git
 A directory called "MCSED" will be created containing all of the necessary files for the program.  This is a python based code and does require a few standard python based packages.  All of the packages required can be found in the Anaconda distribution environment.  To install Anaconda, see:
 https://docs.anaconda.com/anaconda/install/
 
-## Example uses
+## How to Run MCSED
 The primary script is run_mcsed.py, which can be called from the command line with input arguments.  To view the input arguments, simply type:
 
 python run_mcsed.py -h
@@ -33,3 +33,9 @@ And you will find a help menu like this.
                         
                         -tf, --test_field: Test filters will match the given input field, default "cosmos"
         
+All of the available options for MCSED are found in config.py.  Here we break down the most important of those.  At the top, there are four key variables:
+
+    ssp = 'fsps'  # 'fsps'
+    isochrone = 'padova'  # 'padova', 'basti', 'mist', 'geneva', 'parsec'
+sfh = 'empirical'  # 'double_powerlaw', 'empirical'
+dust_law = 'noll'  # 'noll'
