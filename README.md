@@ -21,21 +21,21 @@ python run_mcsed.py -h
 
 And you will find a help menu like this.
   
-                        -f, --filename: File to be read for galaxy data
+        -f, --filename: File to be read for galaxy data
                         
-                        -s, --ssp: SSP Models, default "fsps"
+        -s, --ssp: SSP Models, default "fsps"
                         
-                        -z, --metallicity: Metallicity for SSP models, 0.019 is solar
+        -z, --metallicity: Metallicity for SSP models, 0.019 is solar
                         
-                        -i, --isochrone: Isochrone for SSP model, e.g. "padova"
+        -i, --isochrone: Isochrone for SSP model, e.g. "padova"
                         
-                        -t, --test: Test script with mock data
+        -t, --test: Test script with mock data
                         
-                        -tf, --test_field: Test filters will match the given input field, default "cosmos"
+        -tf, --test_field: Test filters will match the given input field, default "cosmos"
         
 All of the available options for MCSED are found in config.py.  Here we break down the most important of those.  At the top, there are four key variables:
 
-        ssp = 'fsps'  # 'fsps'
-        isochrone = 'padova'  # 'padova', 'basti', 'mist', 'geneva', 'parsec'
-sfh = 'empirical'  # 'double_powerlaw', 'empirical'
-dust_law = 'noll'  # 'noll'
+        ssp = 'fsps'  # options include: 'fsps'
+        isochrone = 'padova'  # options include: 'padova'
+        sfh = 'empirical'  # options include: 'double_powerlaw', 'empirical'
+        dust_law = 'noll'  # options include: 'noll'
