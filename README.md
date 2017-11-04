@@ -20,31 +20,16 @@ The primary script is run_mcsed.py, which can be called from the command line wi
 python run_mcsed.py -h
 
 And you will find a help menu like this.
-
-usage: run_mcsed_fit.py [-h] [-f FILENAME] [-s SSP] [-z METALLICITY]
-                        [-i ISOCHRONE] [-t] [-tf TEST_FIELD]
-
-MCSED
-
-optional arguments:
-    -h, --help            show this help message and exit
   
-  -f FILENAME, --filename FILENAME
-  
-                        File to be read for galaxy data
+                        -f, --filename: File to be read for galaxy data
                         
-  -s SSP, --ssp SSP     SSP Models, default fsps
-  
-  -z METALLICITY, --metallicity METALLICITY
-  
-                        Metallicity for SSP models, 0.02 is solar
+                        -s, --ssp: SSP Models, default "fsps"
                         
-  -i ISOCHRONE, --isochrone ISOCHRONE
-  
-                        Isochrone for SSP model, e.g. padova
+                        -z, --metallicity: Metallicity for SSP models, 0.019 is solar
                         
-  -t, --test            Test script with fake data
-  
-  -tf TEST_FIELD, --test_field TEST_FIELD
-  
-                        Test filters will match the given field
+                        -i, --isochrone: Isochrone for SSP model, e.g. "padova"
+                        
+                        -t, --test: Test script with mock data
+                        
+                        -tf, --test_field: Test filters will match the given input field, default "cosmos"
+        
