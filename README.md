@@ -4,7 +4,7 @@
 * Greg Zeimann, UT Austin, grzeimann@gmail.com or gregz@astro.as.utexas.edu
 
 ## Background
-MCSED models the spectral energy distribution (SED) of weakly resolved or unresolved galaxies.  We use parametrized star formation histories (SFHs) and dust attenuation laws in combination with single stellar population models to create a composite stellar population for our observed integrated SEDs to then infer the stellar mass of the system as well as the variables related to SFH and dust.
+MCSED models the spectral energy distribution (SED) of weakly resolved or unresolved galaxies with a strong focus on the observed optical, near-infrared, and infrared wavelengths.  We use parametrized star formation histories (SFHs) and dust attenuation laws in combination with single stellar population models to create a composite stellar population for our observed integrated SEDs.  We use a monte carlo algorithm, emcee (http://dfm.io/emcee/current/), to then infer the posteriors for fitted parameters such as stellar mass.
 
 ## Installation
 To acquire and install this code, simply move to a directory where you would like it stored and type:
@@ -40,4 +40,5 @@ All of the available options for MCSED are found in config.py.  Here we break do
         sfh = 'empirical'  # options include: 'double_powerlaw', 'empirical'
         dust_law = 'noll'  # options include: 'noll'
 
+These allow the user to configure the SED fitter to their specifications and give the flexibility and use of many SSP, SFH, and dust law parameterizations.  Although these are far from extensive, they serve as the dominant 
 
