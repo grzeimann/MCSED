@@ -28,13 +28,23 @@ MCSED
 
 optional arguments:
   -h, --help            show this help message and exit
+  
   -f FILENAME, --filename FILENAME
+  
                         File to be read for galaxy data
+                        
   -s SSP, --ssp SSP     SSP Models, default fsps
+  
   -z METALLICITY, --metallicity METALLICITY
+  
                         Metallicity for SSP models, 0.02 is solar
+                        
   -i ISOCHRONE, --isochrone ISOCHRONE
+  
                         Isochrone for SSP model, e.g. padova
+                        
   -t, --test            Test script with fake data
+  
   -tf TEST_FIELD, --test_field TEST_FIELD
+  
                         Test filters will match the given field
