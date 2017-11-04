@@ -35,6 +35,8 @@ And you will find a help menu like this.
         
 All of the available options for MCSED are found in config.py.  Here we break down the most important of those.  At the top, there are four key variables:
 
+Markup : ```javascript
+         ```
     In (config.py): 
         ssp = 'fsps'  # options include: 'fsps'
         isochrone = 'padova'  # options include: 'padova'
