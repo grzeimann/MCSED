@@ -6,16 +6,16 @@
 .. moduleauthor:: Greg Zeimann <gregz@astro.as.utexas.edu>
 
 """
+# SSP code for models
+ssp = 'fsps'  # options include: 'fsps'
+isochrone = 'padova'  # options include: 'padova'
+sfh = 'empirical'  # options include: 'double_powerlaw', 'empirical'
+dust_law = 'noll'  # options include: 'noll'
+
 # Use metallicity-mass relationship from Ma et al. 2016
 metallicity_mass_relationship = False
 # Fixed metallicity of SSP models if fit_metallicity is False
 metallicity = 0.0006  # for fixed metallicity
-
-# SSP code for models
-ssp = 'fsps'  # 'fsps'
-isochrone = 'padova'  # 'padova', 'basti', 'mist', 'geneva', 'parsec'
-sfh = 'empirical'  # 'double_powerlaw', 'empirical'
-dust_law = 'noll'  # 'noll'
 
 # Dictionaries
 metallicity_dict = {'padova': [0.0002, 0.0003, 0.0004, 0.0005, 0.0006, 0.0008,
