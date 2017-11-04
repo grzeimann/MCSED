@@ -35,5 +35,7 @@ And you will find a help menu like this.
         
 All of the available options for MCSED are found in config.py.  Here we break down the most important of those.  At the top, there are four key variables:
 
-[](https://github.com/grzeimann/MCSED/blob/master/config.py#L9-L13)
+https://github.com/grzeimann/MCSED/blob/master/config.py#L9-L13
+
+
 
