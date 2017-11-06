@@ -65,3 +65,8 @@ The output of such a call is located in "outputs" and includes a figure like thi
 ## Authors
 
 * Greg Zeimann, UT Austin, grzeimann@gmail.com or gregz@astro.as.utexas.edu
+
+## Dependencies
+
+* emcee, tested with version '2.1.0', currently there are errors using '2.2.1'
+* corner, tested with version '2.0.1'
