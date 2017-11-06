@@ -12,6 +12,7 @@ import config
 from ssp import read_ssp
 from astropy.io import fits
 from mcsed import Mcsed
+from distutils.dir_util import mkpath
 
 
 def setup_logging():
@@ -325,7 +326,7 @@ def main(argv=None):
     # Then replace the key variables each iteration for a given galaxy
     mcsed_model = Mcsed(filter_matrix, SSP, ages, masses, wave, args.sfh,
                         args.dust_law)
-
+    mkpath('output')
     if args.test:
         mcsed_model.filter_flag = get_test_filters(args)
         y, yerr, z, truth, true_y = mock_data(args, mcsed_model)
