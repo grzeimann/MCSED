@@ -5,8 +5,6 @@ MCSED models the optical, near-infrared and infrared spectral energy distributio
 
 MCSED targets galaxies at cosmic noon (z ~ 1-3) that are selected via their emission lines either in the rest-frame optical or ultraviolet wavelengths.  These sources are drawn from the 3DHST survey (http://3dhst.research.yale.edu/Home.html) as well as the HETDEX survey (http://hetdex.org/).  Initial SED fitting efforts revealed that these systems are forming stars at a rate of 1-100 solar masses per year and have total stellar masses of 10^7-10^10 ([Hagen et al. 2016](http://adsabs.harvard.edu/abs/2016ApJ...817...79H)).  
 
-We use a monte carlo algorithm, emcee (http://dfm.io/emcee/current/), to then infer the posteriors for fitted parameters such as stellar mass.
-
 ## Installation
 To acquire and install this code, simply move to a directory where you would like it stored and type:
 
@@ -60,8 +58,15 @@ The call would look like:
         python run_mcsed.py -f PATH/FILENAME 
         
 The output of such a call is located in "outputs" and includes a figure like this:
-
+<p align="center">
+  <img src="example_triangle.png" width="650"/>
+</p>
 
 ## Authors
 
 * Greg Zeimann, UT Austin, grzeimann@gmail.com or gregz@astro.as.utexas.edu
+
+## Dependencies
+
+* emcee, tested with version '2.1.0', currently there are errors using '2.2.1'
+* corner, tested with version '2.0.1'
