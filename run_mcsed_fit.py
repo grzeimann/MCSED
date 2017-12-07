@@ -11,6 +11,7 @@ import logging
 import config
 from ssp import read_ssp
 from astropy.io import fits
+from astropy.table import Table
 from mcsed import Mcsed
 from distutils.dir_util import mkpath
 
@@ -83,6 +84,10 @@ def parse_args(argv=None):
     parser.add_argument("-tf", "--test_field",
                         help='''Test filters will match the given field''',
                         type=str, default='cosmos')
+
+    parser.add_argument("-o", "--output_filename",
+                        help='''Output filename for given run''',
+                        type=str, default='test.dat')
 
     args = parser.parse_args(args=argv)
 
@@ -273,7 +278,7 @@ def draw_gaussian_dist(nsamples, means, sigmas):
     return sigmas * N + means
 
 
-def mock_data(args, mcsed_model, nsamples=20, phot_error=0.2):
+def mock_data(args, mcsed_model, nsamples=10, phot_error=0.2):
     ''' Create mock data to test quality of MCSED fits
 
     Parameters
@@ -327,6 +332,18 @@ def main(argv=None):
     mcsed_model = Mcsed(filter_matrix, SSP, ages, masses, wave, args.sfh,
                         args.dust_law)
     mkpath('output')
+    names = mcsed_model.get_param_names()
+    names.append('Log Mass')
+    percentiles = [5, 16, 50, 84, 95]
+    labels = ['Field', 'ID', 'z']
+    for name in names:
+        labels = labels + [name + '_%02d' % per for per in percentiles]
+    formats = {}
+    for label in labels:
+        formats[label] = '%0.3f'
+    formats['Field'], formats['ID'] = ('%s', '%04d')
+    mcsed_model.table = Table(names=labels, dtype=['S5', 'i4'] +
+                              ['f8']*(len(labels)-2))
     if args.test:
         mcsed_model.filter_flag = get_test_filters(args)
         y, yerr, z, truth, true_y = mock_data(args, mcsed_model)
@@ -340,6 +357,9 @@ def main(argv=None):
             mcsed_model.set_new_redshift(zi)
             mcsed_model.fit_model()
             mcsed_model.triangle_plot('output/triangle_fake_%04d' % cnt)
+            mcsed_model.table.add_row(['Test', cnt, zi] + [0.]*(len(labels)-3))
+            mcsed_model.add_fitinfo_to_table(percentiles)
+            print(mcsed_model.table)
             cnt += 1
     else:
         y, yerr, z, flag, objid, field = read_input_file(args)
@@ -352,7 +372,11 @@ def main(argv=None):
             mcsed_model.set_new_redshift(zi)
             mcsed_model.fit_model()
             mcsed_model.triangle_plot('output/triangle_%s_%04d' % (fd, oi))
-
-
+            mcsed_model.table.add_row([fd, oi, zi] + [0.]*(len(labels)-3))
+            mcsed_model.add_fitinfo_to_table(percentiles)
+            print(mcsed_model.table)
+    mcsed_model.table.write('output/%s' % args.output_filename,
+                            format='ascii.fixed_width_two_line',
+                            formats=formats)
 if __name__ == '__main__':
     main()

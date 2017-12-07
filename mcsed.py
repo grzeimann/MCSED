@@ -496,3 +496,12 @@ class Mcsed:
         fig.set_size_inches(15.0, 15.0)
         fig.savefig("%s.png" % (outname), dpi=150)
         plt.close()
+
+    def add_fitinfo_to_table(self, percentiles, start_value=3, lnprobcut=7.5):
+        chi2sel = (self.samples[:, -1] >
+                   (np.max(self.samples[:, -1], axis=0) - lnprobcut))
+        nsamples = self.samples[chi2sel, :-1]
+        n = len(percentiles)
+        for i, per in enumerate(percentiles):
+            for j, v in enumerate(np.percentile(nsamples, per, axis=0)):
+                self.table[-1][(i + start_value + j*n)] = v
