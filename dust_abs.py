@@ -12,7 +12,7 @@
 import numpy as np
 
 
-def calzetti(wave):
+def calzettilaw(wave):
     ''' Calzetti et al. (2000) dust attenuation curve, k(wave)
 
     Parameters
@@ -37,6 +37,81 @@ def calzetti(wave):
     k[sel1] = k1
     k[sel2] = k2
     return k
+
+
+class calzetti:
+    ''' Calzetti Dust Law
+    '''
+    def __init__(self, tau=0.7, tau_lims=[-0.2, 3.0], tau_delta=0.2):
+        ''' Initialize Class
+
+        Parameters
+        -----
+        tau : float
+            Effective depth, e.g., Observed = True * exp**(-tau/4.05 * k(wave))
+        '''
+        self.tau = tau
+        self.tau_lims = tau_lims
+        self.tau_delta = tau_delta
+        self.nparams = 1
+        self.calz = None
+
+    def get_params(self):
+        ''' Return current parameters '''
+        return [self.tau]
+
+    def get_param_lims(self):
+        ''' Return current parameter limits '''
+        return [self.tau_lims]
+
+    def get_param_deltas(self):
+        ''' Return current parameter deltas '''
+        return [self.tau_delta]
+
+    def get_names(self):
+        ''' Return names of each parameter '''
+        return ['$tau_{dust}$']
+
+    def prior(self):
+        ''' Uniform prior based on boundaries '''
+        tau_flag = (self.tau > self.tau_lims[0])*(self.tau < self.tau_lims[1])
+        return tau_flag
+
+    def set_parameters_from_list(self, input_list, start_value):
+        ''' Set parameters from a list and a start_value
+
+        Parameters
+        ----------
+        input_list : list
+            list of input parameters (could be much larger than number of
+            parameters to be set)
+        start_value : int
+            initial index from list to read out parameters
+        '''
+        self.tau = input_list[start_value]
+
+    def plot(self, ax, wave, color=[0/255., 175/255., 202/255.]):
+        ''' Plot Dust Law for given set of parameters '''
+        dust = self.evaluate(wave)
+        ax.plot(wave, dust, color=color, alpha=0.4)
+
+    def evaluate(self, wave):
+        ''' Evaluate Dust Law
+
+        Parameters
+        ----------
+        wave : numpy array (1 dim)
+            wavelength
+
+        Returns
+        -------
+        taulam : numpy array (1 dim)
+            Effective optical depth as a function of wavelength
+        '''
+        if self.calz is None:
+            self.calz = calzetti(wave)
+        taulam = self.tau / 4.05 * self.calz
+        return taulam
 
 
 class noll:
@@ -136,7 +211,7 @@ class noll:
         dellam = 350.
         lam0 = 2175.
         if self.calz is None:
-            self.calz = calzetti(wave)
+            self.calz = calzettilaw(wave)
         Dlam = (self.Eb * (wave*dellam)**2 /
                           ((wave**2-lam0**2)**2+(wave*dellam)**2))
         taulam = (self.tau / 4.05 *
