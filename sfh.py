@@ -13,6 +13,101 @@ import numpy as np
 from cosmology import Cosmology
 
 
+class constant:
+    ''' The constant star formation history '''
+    def __init__(self, logsfr=1.0, age=-.5, logsfr_lims=[-3., 3.],
+                 age_lims=[-3., 0.4], logsfr_delta=0.4, age_delta=0.2):
+        ''' Initialize this class
+
+        Parameters
+        ----------
+        logsfr : float
+            Constant SFR in log based 10
+        age : float
+            Age of the galaxy when observed in log Gyrs
+        logsfr_lims : list
+            A two valued list for lower and upper boundary values for logsfr
+        age_lims : list
+            A two valued list for lower and upper boundary values for age
+        logsfr_delta : float
+            sigma to draw from a normal distribution when simulating galaxies
+        age_delta : float
+            sigma to draw from a normal distribution when simulating galaxies
+        '''
+        self.logsfr = logsfr
+        self.age = age
+        self.logsfr_lims = logsfr_lims
+        self.age_lims = age_lims
+        self.logsfr_delta = logsfr_delta
+        self.age_delta = age_delta
+        self.nparams = 2
+
+    def set_agelim(self, redshift):
+        ''' Set the Age limit based on age of the universe '''
+        C = Cosmology()
+        self.age_lims[1] = np.log10(C.lookback_time(20.) -
+                                    C.lookback_time(redshift))
+
+    def get_params(self):
+        ''' Return current parameters '''
+        return [self.logsfr, self.age]
+
+    def get_param_lims(self):
+        ''' Return current parameters '''
+        return [self.logsfr_lims, self.age_lims]
+
+    def get_param_deltas(self):
+        ''' Return current parameter deltas '''
+        return [self.logsfr_delta, self.age_delta]
+
+    def get_names(self):
+        ''' Return names of each parameter '''
+        return ['Log SFR', 'Log Age']
+
+    def prior(self):
+        ''' Uniform prior based on boundaries '''
+        logsfr_flag = ((self.logsfr > self.logsfr_lims[0]) *
+                       (self.logsfr < self.logsfr_lims[1]))
+        age_flag = (self.age > self.age_lims[0])*(self.age < self.age_lims[1])
+        return logsfr_flag * age_flag
+
+    def set_parameters_from_list(self, input_list, start_value):
+        ''' Set parameters from a list and a start_value
+
+        Parameters
+        ----------
+        input_list : list
+            list of input parameters (could be much larger than number of
+            parameters to be set)
+        start_value : int
+            initial index from list to read out parameters
+        '''
+        self.logsfr = input_list[start_value]
+        self.age = input_list[start_value+1]
+
+    def plot(self, ax, color=[238/255., 90/255., 18/255.]):
+        ''' Plot SFH for given set of parameters '''
+        t = np.logspace(self.age_lims[0], self.age)
+        sfr = self.evaluate(t)
+        ax.plot(t, sfr, color=color, alpha=0.4)
+
+    def evaluate(self, t):
+        ''' Evaluate double power law SFH
+
+        Parameters
+        ----------
+        t : numpy array (1 dim)
+            time in Gyr
+
+        Returns
+        -------
+        msfr : numpy array (1 dim)
+            Star formation rate at given time in time array
+        '''
+        msfr = 10**self.logsfr * np.ones(t.shape)
+        return msfr
+
+
 class double_powerlaw:
     ''' The double powerlaw function provides a good description for the
     cosmic star formation history and any reasonable, smooth, continuous
