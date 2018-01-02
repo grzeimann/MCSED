@@ -109,7 +109,7 @@ class calzetti:
             Effective optical depth as a function of wavelength
         '''
         if self.calz is None:
-            self.calz = calzetti(wave)
+            self.calz = calzettilaw(wave)
         taulam = self.tau / 4.05 * self.calz
         return taulam
 
