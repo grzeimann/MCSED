@@ -104,7 +104,7 @@ def read_fsps(args):
                     spec.append(np.array(l, dtype=float) * solar_microjansky)
             cnt += 1
     spec = np.array(spec).swapaxes(0, 1)
-    ages = np.array(ages)
+    ages, masses = (np.array(ages), np.array(masses))
     wave, spec = get_coarser_wavelength_fsps(wave, spec)
     if args.sfh == 'empirical':
         ages, spec = bin_ages_fsps(args, ages, spec)
