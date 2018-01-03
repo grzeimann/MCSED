@@ -219,8 +219,8 @@ def read_input_file(args):
                 flag[i, j] = False
                 continue
             if colname in field_dict[loc].columns.names:
-                fi = field_dict[loc].data[colname][int(datum[1])]
-                fie = field_dict[loc].data[ecolname][int(datum[1])]
+                fi = field_dict[loc].data[colname][int(datum[1])-1]
+                fie = field_dict[loc].data[ecolname][int(datum[1])-1]
                 if (fi > -99.):
                     y[i, j] = fi*fac
                     yerr[i, j] = fie*fac
