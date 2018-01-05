@@ -33,7 +33,7 @@ class Mcsed:
     def __init__(self, filter_matrix, ssp_spectra, ssp_ages, ssp_masses,
                  wave, sfh_name, dust_abs_name, data_fnu=None,
                  data_fnu_e=None, redshift=None, filter_flag=None,
-                 input_spectrum=None, input_params=None, sigma_m=0.02,
+                 input_spectrum=None, input_params=None, sigma_m=0.1,
                  nwalkers=40, nsteps=1000, true_fnu=None):
         ''' Initialize the Mcsed class.
 
@@ -422,17 +422,25 @@ class Mcsed:
                       10**self.sfh_class.age_lims[1]])
         ax1.set_ylim([1e-5, 1e3])
         ax2 = fig.add_subplot(3, 1, 2)
+        ax2.set_position([0.7, 0.60, 0.25, 0.15])
+        ax2.set_xscale('log')
+        xtick_pos = [1000, 3000, 10000]
+        xtick_lbl = ['1000', '3000', '10000']
+        ax2.set_xticks(xtick_pos)
+        ax2.set_xticklabels(xtick_lbl)
         ax2.set_xlim([1000, 20000])
         ax2.set_ylim([0, 8])
-        ax2.set_xscale('log')
-        ax2.set_position([0.7, 0.60, 0.25, 0.15])
         ax2.set_ylabel(r'Dust Optical depth')
         ax2.set_xlabel(r'Wavelength $\AA$')
         ax3 = fig.add_subplot(3, 1, 3)
         ax3.set_position([0.38, 0.80, 0.25, 0.15])
-        ax3.set_xlim([3000, 80000])
         ax3.set_xscale('log')
-        ax3.set_xlabel(r'Wavelength $\AA$')
+        xtick_pos = [5000, 10000, 20000, 50000]
+        xtick_lbl = ['0.5', '1', '2', '5']
+        ax3.set_xticks(xtick_pos)
+        ax3.set_xticklabels(xtick_lbl)
+        ax3.set_xlim([3000, 80000])
+        ax3.set_xlabel(r'Wavelength $\mu m$')
         ax3.set_ylabel(r'$F_{\nu}$ ($\mu$Jy)')
         rndsamples = 25
         for i in np.arange(rndsamples):
@@ -475,7 +483,7 @@ class Mcsed:
         chi2sel = (self.samples[:, -1] >
                    (np.max(self.samples[:, -1], axis=0) - lnprobcut))
         nsamples = self.samples[chi2sel, :]
-        o = self.sfh_class.nparams
+        o = 0  # self.sfh_class.nparams
         names = self.get_param_names()[o:]
         names.append('Log Mass')
         if self.input_params is not None:
