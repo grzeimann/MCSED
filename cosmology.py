@@ -45,9 +45,9 @@ class Cosmology:
             Luminosity distance (units of 10 pc)
         '''
         zi = np.arange(0., z, stepsize)
-        E = np.sqrt(self.omega_m * (1 + zi)**3 + self.omega_k * (1 + zi)**2 +
+        E = np.sqrt(self.omega_m * (1. + zi)**3 + self.omega_k * (1. + zi)**2 +
                     self.omega_l)
-        d = (1 + z) * self.c / self.H_0 * np.sum(1. / E * stepsize)
+        d = (1. + z) * self.c / self.H_0 * np.sum(1. / E * stepsize)
         return d * 1e5
 
     def lookback_time(self, z, stepsize=0.001):
@@ -66,7 +66,7 @@ class Cosmology:
             Lookback time (units of Gyr)
         '''
         zi = np.arange(0., z, stepsize)
-        E = np.sqrt(self.omega_m * (1 + zi)**3 + self.omega_k * (1 + zi)**2 +
+        E = np.sqrt(self.omega_m * (1. + zi)**3 + self.omega_k * (1. + zi)**2 +
                     self.omega_l)
         t = self.t_h * np.sum(stepsize / ((1. + zi) * E))
         return t
