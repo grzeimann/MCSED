@@ -42,40 +42,40 @@ def calzettilaw(wave):
 class calzetti:
     ''' Calzetti Dust Law
     '''
-    def __init__(self, tau=0.7, tau_lims=[-0.2, 3.0], tau_delta=0.2):
+    def __init__(self, Av=0.7, Av_lims=[-0.2, 5.0], Av_delta=0.2):
         ''' Initialize Class
 
         Parameters
         -----
-        tau : float
-            Effective depth, e.g., Observed = True * exp**(-tau/4.05 * k(wave))
+        Av : float
+            Observed = True * 10**(-0.4 * Av / 4.05 * k(wave))
         '''
-        self.tau = tau
-        self.tau_lims = tau_lims
-        self.tau_delta = tau_delta
+        self.Av = Av
+        self.Av_lims = Av_lims
+        self.Av_delta = Av_delta
         self.nparams = 1
         self.calz = None
 
     def get_params(self):
         ''' Return current parameters '''
-        return [self.tau]
+        return [self.Av]
 
     def get_param_lims(self):
         ''' Return current parameter limits '''
-        return [self.tau_lims]
+        return [self.Av_lims]
 
     def get_param_deltas(self):
         ''' Return current parameter deltas '''
-        return [self.tau_delta]
+        return [self.Av_delta]
 
     def get_names(self):
         ''' Return names of each parameter '''
-        return ['$tau_{dust}$']
+        return ['$A_V$']
 
     def prior(self):
         ''' Uniform prior based on boundaries '''
-        tau_flag = (self.tau > self.tau_lims[0])*(self.tau < self.tau_lims[1])
-        return tau_flag
+        Av_flag = (self.Av > self.Av_lims[0])*(self.Av < self.Av_lims[1])
+        return Av_flag
 
     def set_parameters_from_list(self, input_list, start_value):
         ''' Set parameters from a list and a start_value
@@ -88,12 +88,12 @@ class calzetti:
         start_value : int
             initial index from list to read out parameters
         '''
-        self.tau = input_list[start_value]
+        self.Av = input_list[start_value]
 
     def plot(self, ax, wave, color=[0/255., 175/255., 202/255.]):
         ''' Plot Dust Law for given set of parameters '''
         dust = self.evaluate(wave)
-        ax.plot(wave, dust, color=color, alpha=0.4)
+        ax.plot(wave, dust, color=color, alpha=0.2)
 
     def evaluate(self, wave):
         ''' Evaluate Dust Law
@@ -105,13 +105,13 @@ class calzetti:
 
         Returns
         -------
-        taulam : numpy array (1 dim)
+        Avlam : numpy array (1 dim)
             Effective optical depth as a function of wavelength
         '''
         if self.calz is None:
             self.calz = calzettilaw(wave)
-        taulam = self.tau / 4.05 * self.calz
-        return taulam
+        Alam = self.Av / 4.05 * self.calz
+        return Alam
 
 
 class noll:
@@ -124,28 +124,28 @@ class noll:
         D(wave) = frac{E_b (wave,dellam)^2 }{(wave^2-lam0^2)^2
                      + (wave,dellam)^2}
     '''
-    def __init__(self, tau=0.7, delta=0.0, Eb=1.0, tau_lims=[-0.2, 3.0],
-                 delta_lims=[-1., 1.], Eb_lims=[-0.2, 6.], tau_delta=0.2,
+    def __init__(self, Av=0.7, delta=0.0, Eb=1.0, Av_lims=[-0.2, 3.0],
+                 delta_lims=[-1., 1.], Eb_lims=[-0.2, 6.], Av_delta=0.2,
                  delta_delta=0.2, Eb_delta=0.4):
         ''' Initialize Class
 
         Parameters
         -----
-        tau : float
-            Effective depth, e.g., Observed = True * exp**(-tau/4.05 * k(wave))
+        Av : float
+            Magnitude of extinction in V band (5500A)
         delta : float
             Power for powerlaw modification of Calzetti curve
         Eb : float
             Strength of 2175A bump.  See equation above for the Drude profile,
             D(wave)
         '''
-        self.tau = tau
+        self.Av = Av
         self.delta = delta
         self.Eb = Eb
-        self.tau_lims = tau_lims
+        self.Av_lims = Av_lims
         self.delta_lims = delta_lims
         self.Eb_lims = Eb_lims
-        self.tau_delta = tau_delta
+        self.Av_delta = Av_delta
         self.delta_delta = delta_delta
         self.Eb_delta = Eb_delta
         self.nparams = 3
@@ -153,27 +153,27 @@ class noll:
 
     def get_params(self):
         ''' Return current parameters '''
-        return [self.tau, self.delta, self.Eb]
+        return [self.Av, self.delta, self.Eb]
 
     def get_param_lims(self):
         ''' Return current parameter limits '''
-        return [self.tau_lims, self.delta_lims, self.Eb_lims]
+        return [self.Av_lims, self.delta_lims, self.Eb_lims]
 
     def get_param_deltas(self):
         ''' Return current parameter deltas '''
-        return [self.tau_delta, self.delta_delta, self.Eb_delta]
+        return [self.Av_delta, self.delta_delta, self.Eb_delta]
 
     def get_names(self):
         ''' Return names of each parameter '''
-        return ['$tau_{dust}$', '$\delta$', '$E_b$']
+        return ['$A_V$', '$\delta$', '$E_b$']
 
     def prior(self):
         ''' Uniform prior based on boundaries '''
-        tau_flag = (self.tau > self.tau_lims[0])*(self.tau < self.tau_lims[1])
+        Av_flag = (self.Av > self.Av_lims[0])*(self.Av < self.Av_lims[1])
         delta_flag = ((self.delta > self.delta_lims[0]) *
                       (self.delta < self.delta_lims[1]))
         Eb_flag = (self.Eb > self.Eb_lims[0])*(self.Eb < self.Eb_lims[1])
-        return tau_flag * delta_flag * Eb_flag
+        return Av_flag * delta_flag * Eb_flag
 
     def set_parameters_from_list(self, input_list, start_value):
         ''' Set parameters from a list and a start_value
@@ -186,7 +186,7 @@ class noll:
         start_value : int
             initial index from list to read out parameters
         '''
-        self.tau = input_list[start_value]
+        self.Av = input_list[start_value]
         self.delta = input_list[start_value+1]
         self.Eb = input_list[start_value+2]
 
@@ -205,7 +205,7 @@ class noll:
 
         Returns
         -------
-        taulam : numpy array (1 dim)
+        Alam : numpy array (1 dim)
             Effective optical depth as a function of wavelength
         '''
         dellam = 350.
@@ -214,6 +214,5 @@ class noll:
             self.calz = calzettilaw(wave)
         Dlam = (self.Eb * (wave*dellam)**2 /
                           ((wave**2-lam0**2)**2+(wave*dellam)**2))
-        taulam = (self.tau / 4.05 *
-                  (self.calz+Dlam)*(wave/5500)**(self.delta))
-        return taulam
+        Alam = (self.Av / 4.05 * (self.calz+Dlam)*(wave/5500)**(self.delta))
+        return Alam
