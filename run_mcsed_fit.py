@@ -43,6 +43,17 @@ def setup_logging():
     return log
 
 
+def str2bool(v, log):
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        log.warning('Could not interpret "fix_metallicity" argument, by '
+                    'default it will be set to True')
+        return True
+
+
 def parse_args(argv=None):
     '''Parse arguments from commandline or a manually passed list
 
@@ -89,10 +100,35 @@ def parse_args(argv=None):
                         help='''Output filename for given run''',
                         type=str, default='test.dat')
 
+    parser.add_argument("-nw", "--nwalkers",
+                        help='''Number of walkers for EMCEE''',
+                        type=float, default=None)
+
+    parser.add_argument("-ns", "--nsteps",
+                        help='''Number of steps for EMCEE''',
+                        type=float, default=None)
+
+    parser.add_argument("-an", "--add_nebular",
+                        help='''Add Nebular Emission''',
+                        type=bool, default=None)
+
+    parser.add_argument("-lu", "--logU",
+                        help='''Ionization Parameter for nebular gas''',
+                        type=float, default=None)
+
+    parser.add_argument("-fm", "--fix_metallicity",
+                        help='''Fix Metallicity''',
+                        type=str, default=None)
+
+    parser.add_argument("-fe", "--floor_error",
+                        help='''Error floor for photometry''',
+                        type=float, default=None)
+
     args = parser.parse_args(args=argv)
 
     # Use config values if none are set in the input
-    arg_inputs = ['ssp', 'metallicity', 'isochrone']
+    arg_inputs = ['ssp', 'metallicity', 'isochrone', 'nwalkers', 'nsteps',
+                  'add_nebular', 'logU', 'floor_error', 'fix_metallicity']
     for arg_i in arg_inputs:
         if getattr(args, arg_i) is None:
             setattr(args, arg_i, getattr(config, arg_i))
@@ -106,6 +142,7 @@ def parse_args(argv=None):
         setattr(args, con_copy, getattr(config, con_copy))
 
     args.log = setup_logging()
+    args.fix_metallicity = str2bool(str(args.fix_metallicity), args.log)
 
     return args
 
@@ -223,7 +260,13 @@ def read_input_file(args):
                 fie = field_dict[loc].data[ecolname][int(datum[1])-1]
                 if (fi > -99.):
                     y[i, j] = fi*fac
-                    yerr[i, j] = fie*fac
+                    # use a floor error if necessary
+                    if fi != 0:
+                        yerr[i, j] = np.abs(np.max([args.floor_error,
+                                            np.abs(fie/fi)]) * fi * fac)
+                    else:
+                        yerr[i, j] = 0.0
+                        flag[i, j] = False
                     flag[i, j] = True
                 else:
                     y[i, j] = 0.0
@@ -278,7 +321,7 @@ def draw_gaussian_dist(nsamples, means, sigmas):
     return sigmas * N + means
 
 
-def mock_data(args, mcsed_model, nsamples=10, phot_error=0.2):
+def mock_data(args, mcsed_model, nsamples=5, phot_error=0.1):
     ''' Create mock data to test quality of MCSED fits
 
     Parameters
@@ -301,7 +344,7 @@ def mock_data(args, mcsed_model, nsamples=10, phot_error=0.2):
         Mock input parameters for each fake galaxy, e.g. dust, sfh, mass
     '''
     # Build fake theta, set z, mass, age to get sfh_a
-    thetas = mcsed_model.get_init_walker_values(num=nsamples)
+    thetas = mcsed_model.get_init_walker_values(num=nsamples, kind='ball')
     zobs = draw_uniform_dist(nsamples, 1.9, 2.35)
     params, y, yerr, true_y = [], [], [], []
     for theta, z in zip(thetas, zobs):
@@ -323,14 +366,18 @@ def main(argv=None):
     args = parse_args(argv)
 
     # Load Single Stellar Population model(s)
-    ages, masses, wave, SSP = read_ssp(args)
+    ages, masses, wave, SSP, met = read_ssp(args)
     # Build Filter Matrix
     filter_matrix = build_filter_matrix(args, wave)
 
     # Make one instance of Mcsed for speed on initialization
     # Then replace the key variables each iteration for a given galaxy
-    mcsed_model = Mcsed(filter_matrix, SSP, ages, masses, wave, args.sfh,
-                        args.dust_law)
+    mcsed_model = Mcsed(filter_matrix, SSP, ages, masses, met, wave, args.sfh,
+                        args.dust_law, nwalkers=args.nwalkers,
+                        nsteps=args.nsteps)
+    if args.fix_metallicity:
+        mcsed_model.ssp_class.fix_met = True
+        mcsed_model.ssp_class.met = args.metallicity
     mkpath('output')
     names = mcsed_model.get_param_names()
     names.append('Log Mass')
@@ -346,17 +393,19 @@ def main(argv=None):
                               ['f8']*(len(labels)-2))
     if args.test:
         mcsed_model.filter_flag = get_test_filters(args)
+        default = mcsed_model.get_params()
         y, yerr, z, truth, true_y = mock_data(args, mcsed_model)
         cnt = 0
         for yi, ye, zi, tr, ty in zip(y, yerr, z, truth, true_y):
             mcsed_model.input_params = tr
-            mcsed_model.set_class_parameters(tr[:-1])
+            mcsed_model.set_class_parameters(default)
             mcsed_model.data_fnu = yi
             mcsed_model.data_fnu_e = ye
             mcsed_model.true_fnu = ty
             mcsed_model.set_new_redshift(zi)
             mcsed_model.fit_model()
-            mcsed_model.triangle_plot('output/triangle_fake_%04d' % cnt)
+            mcsed_model.sample_plot('output/sample_fake_%05d' % cnt)
+            mcsed_model.triangle_plot('output/triangle_fake_%05d' % cnt)
             mcsed_model.table.add_row(['Test', cnt, zi] + [0.]*(len(labels)-3))
             mcsed_model.add_fitinfo_to_table(percentiles)
             print(mcsed_model.table)
@@ -371,12 +420,13 @@ def main(argv=None):
             mcsed_model.data_fnu_e = ye[fl]
             mcsed_model.set_new_redshift(zi)
             mcsed_model.fit_model()
-            mcsed_model.triangle_plot('output/triangle_%s_%04d' % (fd, oi))
+            mcsed_model.sample_plot('output/sample_%s_%05d' % (fd, oi))
+            mcsed_model.triangle_plot('output/triangle_%s_%05d' % (fd, oi))
             mcsed_model.table.add_row([fd, oi, zi] + [0.]*(len(labels)-3))
             mcsed_model.add_fitinfo_to_table(percentiles)
             print(mcsed_model.table)
     mcsed_model.table.write('output/%s' % args.output_filename,
                             format='ascii.fixed_width_two_line',
-                            formats=formats)
+                            formats=formats, overwrite=True)
 if __name__ == '__main__':
     main()
