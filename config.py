@@ -9,13 +9,25 @@
 # SSP code for models
 ssp = 'fsps'  # options include: 'fsps'
 isochrone = 'padova'  # options include: 'padova'
-sfh = 'empirical'  # options include: 'double_powerlaw', 'empirical'
-dust_law = 'noll'  # options include: 'noll'
+sfh = 'constant'  # options include: 'double_powerlaw', 'empirical'
+dust_law = 'calzetti'  # options include: 'noll', 'calzetti'
+
+# EMCEE parameters
+nwalkers = 100
+nsteps = 1000
+
+# Nebular Emission Properties
+add_nebular = True
+logU = -2.
+
+# Error floor under which we don't trust the error estimates (fraction)
+floor_error = 0.10
 
 # Use metallicity-mass relationship from Ma et al. 2016
 metallicity_mass_relationship = False
 # Fixed metallicity of SSP models if fit_metallicity is False
-metallicity = 0.0006  # for fixed metallicity
+fix_metallicity = True
+metallicity = 0.0077  # for fixed metallicity
 
 # Dictionaries
 metallicity_dict = {'padova': [0.0002, 0.0003, 0.0004, 0.0005, 0.0006, 0.0008,
