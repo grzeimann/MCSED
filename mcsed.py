@@ -20,6 +20,7 @@
 import logging
 import sfh
 import dust_abs
+import ssp
 import cosmology
 import emcee
 import corner
@@ -31,7 +32,7 @@ import matplotlib.pyplot as plt
 
 class Mcsed:
     def __init__(self, filter_matrix, ssp_spectra, ssp_ages, ssp_masses,
-                 wave, sfh_name, dust_abs_name, data_fnu=None,
+                 ssp_met, wave, sfh_name, dust_abs_name, data_fnu=None,
                  data_fnu_e=None, redshift=None, filter_flag=None,
                  input_spectrum=None, input_params=None, sigma_m=0.1,
                  nwalkers=40, nsteps=1000, true_fnu=None):
@@ -84,10 +85,13 @@ class Mcsed:
         self.ssp_spectra = ssp_spectra
         self.ssp_ages = ssp_ages
         self.ssp_masses = ssp_masses
+        self.ssp_met = ssp_met
         self.wave = wave
         self.sfh_class = getattr(sfh, sfh_name)()
         self.dust_abs_class = getattr(dust_abs, dust_abs_name)()
-        self.param_classes = ['sfh_class', 'dust_abs_class']
+        self.ssp_class = getattr(ssp, 'fsps_freeparams')()
+        self.SSP = None
+        self.param_classes = ['sfh_class', 'dust_abs_class', 'ssp_class']
         self.data_fnu = data_fnu
         self.data_fnu_e = data_fnu_e
         self.redshift = redshift
@@ -186,6 +190,29 @@ class Mcsed:
         self.dust_abs_class.set_parameters_from_list(theta, start_value)
         start_value += self.dust_abs_class.nparams
 
+        ######################################################################
+        # SSP Parameters
+        self.ssp_class.set_parameters_from_list(theta, start_value)
+        start_value += self.ssp_class.nparams
+
+    def get_ssp_spectrum(self):
+        if self.ssp_class.fix_met:
+            if self.SSP is not None:
+                return self.SSP
+        met_weights = np.zeros(self.ssp_met.shape)
+        Z = np.log10(self.ssp_met)
+        ind = np.searchsorted(Z, self.ssp_class.met)
+        if ind == 0:
+            met_weights[0] = 1.
+        elif ind == len(Z):
+            met_weights[ind-1] = 1.
+        else:
+            D = Z[ind] - Z[ind-1]
+            met_weights[ind] = (self.ssp_class.met - Z[ind-1]) / D
+            met_weights[ind-1] = 1. - met_weights[ind]
+        self.SSP = np.dot(self.ssp_spectra, met_weights)
+        return self.SSP
+
     def build_csp(self):
         '''Build a composite stellar population model for a given star
         formation history, dust attenuation law, and dust emission law.
@@ -197,6 +224,9 @@ class Mcsed:
         mass : float
             Mass for csp given the SFH input
         '''
+        # Collapse for metallicity
+        SSP = self.get_ssp_spectrum()
+
         # Need star formation rate from observation back to formation
         sfr = self.sfh_class.evaluate(self.ssp_ages)
         ageval = 10**self.sfh_class.age
@@ -211,26 +241,30 @@ class Mcsed:
 
         # Cover the two cases where ssp_ages contains ageval and when not
         A = np.nonzero(self.ssp_ages <= ageval)[0][-1]
-        B = np.nonzero(self.ssp_ages >= ageval)[0][0]
-        if A == B:
-            spec_dustfree = np.dot(self.ssp_spectra, weight)
-            mass = np.sum(weight * self.ssp_masses)
+        select_too_old = np.nonzero(self.ssp_ages >= ageval)[0]
+        if len(select_too_old):
+            B = np.nonzero(self.ssp_ages >= ageval)[0][0]
+            if A == B:
+                spec_dustfree = np.dot(SSP, weight)
+                mass = np.sum(weight * self.ssp_masses)
+            else:
+                lw = ageval - self.ssp_ages[A]
+                wei = lw * 1e9 * np.interp(ageval, self.ssp_ages, sfr)
+                weight[B] = wei
+                spec_dustfree = np.dot(SSP, weight)
+                mass = np.sum(weight * self.ssp_masses)
         else:
-            lw = ageval - self.ssp_ages[A]
-            wei = lw * 1e9 * np.interp(ageval, self.ssp_ages, sfr)
-            weight[B] = wei
-            spec_dustfree = np.dot(self.ssp_spectra, weight)
+            spec_dustfree = np.dot(SSP, weight)
             mass = np.sum(weight * self.ssp_masses)
 
         # Need to correct for dust attenuation
-        taulam = self.dust_abs_class.evaluate(self.wave)
-        spec_dustobscured = spec_dustfree * np.exp(-1 * taulam)
+        Alam = self.dust_abs_class.evaluate(self.wave)
+        spec_dustobscured = spec_dustfree * 10**(-0.4 * Alam)
 
         # Redshift to observed frame
         csp = np.interp(self.wave, self.wave * (1. + self.redshift),
                         spec_dustobscured * (1. + self.redshift))
         # Correct spectra from 10pc to redshift of the source
-
         return csp / self.Dl**2, mass
 
     def lnprior(self):
@@ -240,9 +274,9 @@ class Mcsed:
         -------
         0.0 if all parameters are in bounds, -np.inf if any are out of bounds
         '''
-        sfh_flag = self.sfh_class.prior()
-        dust_abs_flag = self.dust_abs_class.prior()
-        flag = sfh_flag * dust_abs_flag
+        flag = True
+        for par_cl in self.param_classes:
+            flag *= getattr(self, par_cl).prior()
         if not flag:
             return -np.inf
         else:
@@ -284,7 +318,7 @@ class Mcsed:
         else:
             return -np.inf, -np.inf
 
-    def get_init_walker_values(self, num=None):
+    def get_init_walker_values(self, kind='ball', num=None):
         ''' Before running emcee, this function generates starting points
         for each walker in the MCMC process.
 
@@ -295,17 +329,22 @@ class Mcsed:
         '''
         # We need an initial guess for emcee so we take it from the model class
         # parameter values and deltas
-        init_params = []
-        init_deltas = []
-        param_classes = ['sfh_class', 'dust_abs_class']
-        for par_cl in param_classes:
+        init_params, init_deltas, init_lims = [], [], []
+        for par_cl in self.param_classes:
             init_params.append(getattr(self, par_cl).get_params())
             init_deltas.append(getattr(self, par_cl).get_param_deltas())
+            if len(getattr(self, par_cl).get_param_lims()):
+                init_lims.append(getattr(self, par_cl).get_param_lims())
         theta = list(np.hstack(init_params))
         thetae = list(np.hstack(init_deltas))
+        theta_lims = np.vstack(init_lims)
         if num is None:
             num = self.nwalkers
-        pos = emcee.utils.sample_ball(theta, thetae, size=num)
+        if kind == 'ball':
+            pos = emcee.utils.sample_ball(theta, thetae, size=num)
+        else:
+            pos = (np.random.rand(num)[:, np.newaxis] *
+                   (theta_lims[:, 1]-theta_lims[:, 0]) + theta_lims[:, 0])
         return pos
 
     def get_param_names(self):
@@ -362,23 +401,12 @@ class Mcsed:
             if getattr(self, var) is None:
                 self.error('The variable %s must be set first' % var)
 
-        pos = self.get_init_walker_values()
+        pos = self.get_init_walker_values(kind='ball')
         ndim = pos.shape[1]
         start = time.time()
         # Time to set up the sampler and run the mcmc
         sampler = emcee.EnsembleSampler(self.nwalkers, ndim, self.lnprob,
-                                        a=1.2)
-        initial_steps = 100
-        sampler.run_mcmc(pos, initial_steps)
-        maxprobsearch = sampler.lnprobability == np.max(sampler.lnprobability)
-        indx = np.nonzero(maxprobsearch)[0][0]
-        indy = np.nonzero(maxprobsearch)[1][0]
-        theta = sampler.chain[indx, indy, :]
-        self.set_class_parameters(theta)
-        pos = self.get_init_walker_values()
-
-        # Reset the chain to remove the burn-in samples.
-        sampler.reset()
+                                        a=2.0)
 
         # Do real run
         sampler.run_mcmc(pos, self.nsteps, rstate0=np.random.get_state())
@@ -386,7 +414,7 @@ class Mcsed:
         elapsed = end - start
         self.log.info("Total time taken: %0.2f s" % elapsed)
         self.log.info("Time taken per step per walker: %0.2f ms" %
-                      (elapsed / (initial_steps + self.nsteps) * 1000. /
+                      (elapsed / (self.nsteps) * 1000. /
                        self.nwalkers))
         # Calculate how long the run should last
         tau = np.max(sampler.acor)
@@ -397,6 +425,7 @@ class Mcsed:
                       % (np.round(tau), burnin_step))
         new_chain = np.zeros((self.nwalkers, self.nsteps, ndim+2))
         new_chain[:, :, :-2] = sampler.chain
+        self.chain = sampler.chain
         for i in xrange(len(sampler.blobs)):
             for j in xrange(len(sampler.blobs[0])):
                 x = sampler.blobs[i][j]
@@ -408,7 +437,7 @@ class Mcsed:
     def spectrum_plot(self, ax, color=[0.996, 0.702, 0.031]):
         ''' Make spectum plot for current model '''
         spectrum, mass = self.build_csp()
-        ax.plot(self.wave, spectrum, color=color, alpha=0.2)
+        ax.plot(self.wave, spectrum, color=color, alpha=0.1)
 
     def add_subplots(self, fig, nsamples):
         ''' Add Subplots to Triangle plot below '''
@@ -418,7 +447,7 @@ class Mcsed:
         ax1.set_yscale('log')
         ax1.set_ylabel(r'SFR $M_{\odot} yr^{-1}$')
         ax1.set_xlabel('Lookback Time (Gyr)')
-        ax1.set_xlim([10**self.sfh_class.age_lims[0],
+        ax1.set_xlim([10**-3,
                       10**self.sfh_class.age_lims[1]])
         ax1.set_ylim([1e-5, 1e3])
         ax2 = fig.add_subplot(3, 1, 2)
@@ -430,7 +459,7 @@ class Mcsed:
         ax2.set_xticklabels(xtick_lbl)
         ax2.set_xlim([1000, 20000])
         ax2.set_ylim([0, 8])
-        ax2.set_ylabel(r'Dust Optical depth')
+        ax2.set_ylabel(r'Dust Attenuation (mag)')
         ax2.set_xlabel(r'Wavelength $\AA$')
         ax3 = fig.add_subplot(3, 1, 3)
         ax3.set_position([0.38, 0.80, 0.25, 0.15])
@@ -442,7 +471,7 @@ class Mcsed:
         ax3.set_xlim([3000, 80000])
         ax3.set_xlabel(r'Wavelength $\mu m$')
         ax3.set_ylabel(r'$F_{\nu}$ ($\mu$Jy)')
-        rndsamples = 25
+        rndsamples = 100
         for i in np.arange(rndsamples):
             ind = np.random.randint(0, nsamples.shape[0])
             self.set_class_parameters(nsamples[ind, :-2])
@@ -461,10 +490,10 @@ class Mcsed:
         ax3.errorbar(wv, self.data_fnu, yerr=self.data_fnu_e, fmt='s',
                      fillstyle='none', markersize=2,
                      color=[0.510, 0.373, 0.529], zorder=10)
-        ax3min = self.data_fnu.min()
-        ax3max = self.data_fnu.max()
+        ax3min = np.percentile(self.data_fnu, 5)
+        ax3max = np.percentile(self.data_fnu, 95)
         ax3ran = ax3max - ax3min
-        ax3.set_ylim([ax3min - 0.2 * ax3ran, ax3max + 0.2 * ax3ran])
+        ax3.set_ylim([ax3min - 0.4 * ax3ran, ax3max + 0.4 * ax3ran])
 
     def triangle_plot(self, outname, lnprobcut=7.5):
         ''' Make a triangle corner plot for samples from fit
@@ -498,12 +527,38 @@ class Mcsed:
                             truths=truths,
                             label_kwargs={"fontsize": 18}, show_titles=True,
                             title_kwargs={"fontsize": 16},
-                            quantiles=[0.16, 0.5, 0.84], bins=10)
+                            quantiles=[0.16, 0.5, 0.84], bins=30)
         # Adding subplots
         self.add_subplots(fig, nsamples)
         fig.set_size_inches(15.0, 15.0)
         fig.savefig("%s.png" % (outname), dpi=150)
         plt.close()
+
+    def sample_plot(self, outname):
+        ''' Make a sample plot
+
+        Input
+        -----
+        outname : string
+            The sample plot will be saved as "sample_{outname}.png"
+
+        '''
+        # Make selection for three sigma sample
+        names = self.get_param_names()
+        if self.input_params is not None:
+            truths = self.input_params
+        else:
+            truths = None
+        fig, ax = plt.subplots(self.chain.shape[2], 1, sharex=True,
+                               figsize=(5, 2*self.chain.shape[2]))
+        for i, a in enumerate(ax):
+            for chain in self.chain[:, :, i]:
+                a.plot(chain, 'k-', alpha=0.3)
+            a.set_ylabel(names[i])
+            if truths is not None:
+                a.plot([0, self.chain.shape[1]], [truths[i], truths[i]], 'r--')
+        fig.savefig("%s.png" % (outname))
+        plt.close(fig)
 
     def add_fitinfo_to_table(self, percentiles, start_value=3, lnprobcut=7.5):
         chi2sel = (self.samples[:, -1] >
