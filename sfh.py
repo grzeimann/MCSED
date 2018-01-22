@@ -232,12 +232,12 @@ class double_powerlaw:
         return msfr
 
 
-class empirical:
+class empirical_direct:
     ''' The empirical SFH includes 6 bins of SFR at discrete time intervals '''
-    def __init__(self, init_log_sfr=0., init_log_sfr_lims=[-5., 3.],
-                 init_log_sfr_delta=0.5, ages=[7., 8., 8.5, 9., 9.6]):
+    def __init__(self, init_log_sfr=1., init_log_sfr_lims=[-5., 3.],
+                 init_log_sfr_delta=0.2,
+                 ages=[6.5, 7., 7.5, 8., 8.5, 9., 9.3]):
         ''' Initialize this class
-
         Parameters
         ----------
         TODO Fill these in
@@ -296,7 +296,6 @@ class empirical:
 
     def set_parameters_from_list(self, input_list, start_value):
         ''' Set parameters from a list and a start_value
-
         Parameters
         ----------
         input_list : list
@@ -317,6 +316,123 @@ class empirical:
 
     def evaluate(self, t):
         ''' Evaluate double power law SFH
+        Parameters
+        ----------
+        t : numpy array (1 dim)
+            time in Gyr
+        Returns
+        -------
+        msfr : numpy array (1 dim)
+            Star formation rate at given time in time array
+        '''
+        return [10**p for p in self.get_params()]
+
+
+class empirical:
+    ''' The empirical SFH includes 6 bins of SFR at discrete time intervals '''
+    def __init__(self, mass=9., age=-.5, mass_lims=[6., 12.], age_delta=0.3,
+                 mass_delta=0.5, ages=[6.5, 7., 7.5, 8., 8.5, 9., 9.3]):
+        ''' Initialize this class
+
+        Parameters
+        ----------
+        TODO Fill these in
+        '''
+        self.ages = ages
+        self.nparams = len(self.ages)+1
+        self.nums = np.arange(1, self.nparams-1, dtype=int)
+        self.mass = mass
+        self.age = age
+        self.age_delta = age_delta
+        self.mass_lims = mass_lims
+        self.mass_delta = mass_delta
+        for num in np.arange(1,  self.nparams):
+            setattr(self, 'frac_' + str(num), 1./(len(ages)))
+            setattr(self, 'frac_' + str(num) + '_lims', [0., 1.])
+            setattr(self, 'frac_' + str(num) + '_delta', 1./len(ages)/4.)
+        self.age_lims = [self.ages[1]-9., self.ages[-1]-9.]
+
+    def set_agelim(self, redshift):
+        ''' Set the Age limit based on age of the universe '''
+        C = Cosmology()
+        self.age_lims[1] = np.log10(C.lookback_time(20.) -
+                                    C.lookback_time(redshift))
+
+    def get_params(self):
+        ''' Return current parameters '''
+        l = [self.mass, self.age]
+        for num in self.nums:
+            l.append(getattr(self, 'frac_' + str(num)))
+        return l
+
+    def get_param_lims(self):
+        ''' Return current parameters limits '''
+        l = [self.mass_lims, self.age_lims]
+        for num in self.nums:
+            l.append(getattr(self, 'frac_' + str(num) + '_lims'))
+        return l
+
+    def get_param_deltas(self):
+        ''' Return current parameter deltas '''
+        l = [self.mass_delta, self.age_delta]
+        for num in self.nums:
+            l.append(getattr(self, 'frac_' + str(num) + '_delta'))
+        return l
+
+    def get_names(self):
+        ''' Return names of each parameter '''
+        l = ['lmass', 'age']
+        for num in self.nums:
+            l.append('frac_' + str(num))
+        return l
+
+    def prior(self):
+        ''' Uniform prior based on boundaries '''
+        flag = True
+        total = 0.
+        for num in self.nums:
+            val = getattr(self, 'frac_' + str(num))
+            lims = getattr(self, 'frac_' + str(num) + '_lims')
+            flag *= ((val > lims[0]) * (val < lims[1]))
+            total += val
+        mass_flag = ((self.mass > self.mass_lims[0]) *
+                     (self.mass < self.mass_lims[1]))
+        age_flag = ((self.age > self.age_lims[0]) *
+                    (self.age < self.age_lims[1]))
+        return flag * (total <= 1.) * mass_flag * age_flag
+
+    def set_parameters_from_list(self, input_list, start_value):
+        ''' Set parameters from a list and a start_value
+
+        Parameters
+        ----------
+        input_list : list
+            list of input parameters (could be much larger than number of
+            parameters to be set)
+        start_value : int
+            initial index from list to read out parameters
+        '''
+        self.mass = input_list[start_value]
+        self.age = input_list[start_value+1]
+        total = 0
+        for num in self.nums:
+            v = input_list[start_value + num + 1]
+            setattr(self, 'frac_' + str(num), v)
+            total += v
+        setattr(self, 'frac_' + str(self.nparams - 1), 1. - total)
+        self.tdiff = np.diff(10**np.vstack([[0.] + self.ages,
+                             [self.age+9.]*(len(self.ages)+1)]).min(axis=0))
+
+    def plot(self, ax, color=[238/255., 90/255., 18/255.]):
+        ''' Plot SFH for given set of parameters '''
+        sel = np.where((np.array(self.ages)-9.) <= self.age)[0]
+        t = np.hstack([6., np.array(self.ages)[sel]]) - 9
+        sfr = np.array(self.evaluate(t))
+        ax.step(10**t, np.hstack([sfr[0], sfr[sel]]), where='pre',
+                color=color, alpha=0.2)
+
+    def evaluate(self, t):
+        ''' Evaluate double power law SFH
 
         Parameters
         ----------
@@ -328,4 +444,9 @@ class empirical:
         msfr : numpy array (1 dim)
             Star formation rate at given time in time array
         '''
-        return [10**p for p in self.get_params()]
+        v = self.get_params() + [getattr(self, 'frac_' +
+                                               str(self.nparams - 1))]
+        mass = 10**v[0]
+        denominator = np.dot(self.tdiff, v[2:])
+
+        return [mass * p / denominator for p in v[2:]]
