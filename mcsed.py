@@ -196,21 +196,24 @@ class Mcsed:
         start_value += self.ssp_class.nparams
 
     def get_ssp_spectrum(self):
+        '''
+        Calculate SSP for an arbitrary metallicity (self.ssp_class.met) given a
+        model grid for a range of metallicities (self.ssp_met)
+
+        Returns
+        -------
+        SSP : 2-d array
+            Single stellar population models for each age in self.ages
+        '''
         if self.ssp_class.fix_met:
             if self.SSP is not None:
                 return self.SSP
-        met_weights = np.zeros(self.ssp_met.shape)
         Z = np.log10(self.ssp_met)
-        ind = np.searchsorted(Z, self.ssp_class.met)
-        if ind == 0:
-            met_weights[0] = 1.
-        elif ind == len(Z):
-            met_weights[ind-1] = 1.
-        else:
-            D = Z[ind] - Z[ind-1]
-            met_weights[ind] = (self.ssp_class.met - Z[ind-1]) / D
-            met_weights[ind-1] = 1. - met_weights[ind]
-        self.SSP = np.dot(self.ssp_spectra, met_weights)
+        z = self.ssp_class.met + np.log10(0.019)
+        X = Z - z
+        wei = np.exp(-(X)**2 / (2. * 0.15**2))
+        wei /= wei.sum()
+        self.SSP = np.dot(self.ssp_spectra, wei)
         return self.SSP
 
     def build_csp(self):
@@ -521,10 +524,10 @@ class Mcsed:
             truths = None
         percentilerange = [p for i, p in enumerate(self.get_param_lims())
                            if i >= o] + [[7, 11]]
-        percentilerange = [.99] * len(names)
+        percentilerange = [.98] * len(names)
         fig = corner.corner(nsamples[:, o:-1], labels=names,
                             range=percentilerange,
-                            truths=truths,
+                            truths=truths, truth_color='w',
                             label_kwargs={"fontsize": 18}, show_titles=True,
                             title_kwargs={"fontsize": 16},
                             quantiles=[0.16, 0.5, 0.84], bins=30)
@@ -568,3 +571,8 @@ class Mcsed:
         for i, per in enumerate(percentiles):
             for j, v in enumerate(np.percentile(nsamples, per, axis=0)):
                 self.table[-1][(i + start_value + j*n)] = v
+        return (i + start_value + j*n)
+
+    def add_truth_to_table(self, truth, start_value):
+        for i, tr in enumerate(truth):
+            self.table[-1][start_value + i + 1] = tr
