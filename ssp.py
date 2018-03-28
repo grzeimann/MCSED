@@ -257,7 +257,7 @@ class fsps_freeparams:
         ''' Return names of each parameter '''
         l = []
         if not self.fix_met:
-            l.append('Z')
+            l.append('Log Z')
         return l
 
     def prior(self):
