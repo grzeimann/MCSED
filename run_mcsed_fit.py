@@ -124,11 +124,16 @@ def parse_args(argv=None):
                         help='''Error floor for photometry''',
                         type=float, default=None)
 
+    parser.add_argument("-Ns", "--nsamples",
+                        help='''Number of test objects''',
+                        type=float, default=None)
+
     args = parser.parse_args(args=argv)
 
     # Use config values if none are set in the input
     arg_inputs = ['ssp', 'metallicity', 'isochrone', 'nwalkers', 'nsteps',
-                  'add_nebular', 'logU', 'floor_error', 'fix_metallicity']
+                  'add_nebular', 'logU', 'floor_error', 'fix_metallicity',
+                  'nsamples']
     for arg_i in arg_inputs:
         if getattr(args, arg_i) is None:
             setattr(args, arg_i, getattr(config, arg_i))
@@ -321,7 +326,7 @@ def draw_gaussian_dist(nsamples, means, sigmas):
     return sigmas * N + means
 
 
-def mock_data(args, mcsed_model, nsamples=5, phot_error=0.1):
+def mock_data(args, mcsed_model, nsamples=5, phot_error=0.05):
     ''' Create mock data to test quality of MCSED fits
 
     Parameters
@@ -362,11 +367,26 @@ def mock_data(args, mcsed_model, nsamples=5, phot_error=0.1):
 
 
 def main(argv=None):
+    '''
+    Execute the main functionality of MCSED
+
+    Test mode: "python run_mcsed_fit.py -t"
+
+    Live mode: "python run_mcsed_fit.py -f test_data.dat"
+
+    For a "live" run, the key input ("-f") is a file with three columns:
+    FIELD ID REDSHIFT
+
+    The field options are: cosmos, goodsn, goodss, or aegis
+    The id is the skelton photometric id for the given field
+    The redshift is fixed in the fitting
+    '''
     # Get Inputs
     args = parse_args(argv)
 
     # Load Single Stellar Population model(s)
     ages, masses, wave, SSP, met = read_ssp(args)
+
     # Build Filter Matrix
     filter_matrix = build_filter_matrix(args, wave)
 
@@ -375,10 +395,16 @@ def main(argv=None):
     mcsed_model = Mcsed(filter_matrix, SSP, ages, masses, met, wave, args.sfh,
                         args.dust_law, nwalkers=args.nwalkers,
                         nsteps=args.nsteps)
+
+    # Special case of fixed metallicity
     if args.fix_metallicity:
         mcsed_model.ssp_class.fix_met = True
         mcsed_model.ssp_class.met = args.metallicity
+
+    # Make output folder if it doesn't exist
     mkpath('output')
+
+    # Build names for parameters and labels for table
     names = mcsed_model.get_param_names()
     names.append('Log Mass')
     percentiles = [5, 16, 50, 84, 95]
@@ -388,15 +414,26 @@ def main(argv=None):
     formats = {}
     for label in labels:
         formats[label] = '%0.3f'
+
+    # If in test mode add truth values for table labels
+    if args.test:
+        for name in names:
+            labels.append(name + '_truth')
+            formats[labels[-1]] = '%0.3f'
     formats['Field'], formats['ID'] = ('%s', '%04d')
+
     mcsed_model.table = Table(names=labels, dtype=['S5', 'i4'] +
                               ['f8']*(len(labels)-2))
+
+    # MAIN FUNCTIONALITY
     if args.test:
         mcsed_model.filter_flag = get_test_filters(args)
         default = mcsed_model.get_params()
-        y, yerr, z, truth, true_y = mock_data(args, mcsed_model)
-        cnt = 0
-        for yi, ye, zi, tr, ty in zip(y, yerr, z, truth, true_y):
+        y, yerr, z, truth, true_y = mock_data(args, mcsed_model,
+                                              phot_error=args.floor_error,
+                                              nsamples=args.nsamples)
+        cnts = np.arange(len(z))
+        for yi, ye, zi, tr, ty, cnt in zip(y, yerr, z, truth, true_y, cnts):
             mcsed_model.input_params = tr
             mcsed_model.set_class_parameters(default)
             mcsed_model.data_fnu = yi
@@ -407,9 +444,9 @@ def main(argv=None):
             mcsed_model.sample_plot('output/sample_fake_%05d' % cnt)
             mcsed_model.triangle_plot('output/triangle_fake_%05d' % cnt)
             mcsed_model.table.add_row(['Test', cnt, zi] + [0.]*(len(labels)-3))
-            mcsed_model.add_fitinfo_to_table(percentiles)
+            last = mcsed_model.add_fitinfo_to_table(percentiles)
+            mcsed_model.add_truth_to_table(tr, last)
             print(mcsed_model.table)
-            cnt += 1
     else:
         y, yerr, z, flag, objid, field = read_input_file(args)
         iv = mcsed_model.get_params()
@@ -423,7 +460,7 @@ def main(argv=None):
             mcsed_model.sample_plot('output/sample_%s_%05d' % (fd, oi))
             mcsed_model.triangle_plot('output/triangle_%s_%05d' % (fd, oi))
             mcsed_model.table.add_row([fd, oi, zi] + [0.]*(len(labels)-3))
-            mcsed_model.add_fitinfo_to_table(percentiles)
+            last = mcsed_model.add_fitinfo_to_table(percentiles)
             print(mcsed_model.table)
     mcsed_model.table.write('output/%s' % args.output_filename,
                             format='ascii.fixed_width_two_line',
