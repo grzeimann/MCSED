@@ -234,7 +234,7 @@ class double_powerlaw:
 
 class empirical_direct:
     ''' The empirical SFH includes 6 bins of SFR at discrete time intervals '''
-    def __init__(self, init_log_sfr=1., init_log_sfr_lims=[-5., 3.],
+    def __init__(self, init_log_sfr=1.5, init_log_sfr_lims=[-5., 3.],
                  init_log_sfr_delta=0.2,
                  ages=[6.5, 7., 7.5, 8., 8.5, 9., 9.3]):
         ''' Initialize this class
@@ -246,7 +246,7 @@ class empirical_direct:
         self.nparams = len(self.ages)
         self.nums = np.arange(1, self.nparams+1, dtype=int)
         for num in self.nums:
-            setattr(self, 'sfr_' + str(num), init_log_sfr)
+            setattr(self, 'sfr_' + str(num), init_log_sfr - num * 0.3)
             setattr(self, 'sfr_' + str(num) + '_lims', init_log_sfr_lims)
             setattr(self, 'sfr_' + str(num) + '_delta', init_log_sfr_delta)
         self.age_lims = [-3., self.ages[-1]-9.]
