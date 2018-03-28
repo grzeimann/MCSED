@@ -182,38 +182,40 @@ def read_ssp(args):
 
     '''
     import matplotlib.pyplot as plt
-    s = []
+    s, m = ([], [])
     for met in args.metallicity_dict[args.isochrone]:
         if args.ssp.lower() == 'fsps':
             ages, masses, wave, spec = read_fsps(args, met)
         if args.add_nebular:
             spec = add_nebular_emission(ages, wave, spec, args.logU,
                                         met)
-        if args.sfh == 'empirical' or args.sfh == 'empirical_frac':
+        if args.sfh == 'empirical' or args.sfh == 'empirical_direct':
             ages, spec = bin_ages_fsps(args, np.log10(ages)+9., spec)
         masses = np.ones(ages.shape)
         wave, spec = get_coarser_wavelength_fsps(wave, spec)
-        fig = plt.figure(figsize=(8, 8))
-        wei = np.diff(np.hstack([0., ages]))
-        for i in np.arange(spec.shape[1]):
-            if ages[i] < 3.:
-                plt.plot(wave, spec[:, i] * wei[i])
-        plt.plot(wave, np.dot(spec, wei)/spec.shape[1], 'k-')
-        plt.xlim([900., 40000.])
-        plt.yscale('log')
-        plt.xscale('log')
-        plt.ylim([1e2, 1e12])
-        plt.savefig('test_%0.4f.png' % met)
-        plt.close(fig)
+        wei = (np.diff(np.hstack([0., ages])) *
+               getattr(sfh, args.sfh)().evaluate(ages))
         s.append(spec)
+        m.append(np.dot(spec, wei)/spec.shape[1])
+    fig = plt.figure(figsize=(8, 8))
+    import seaborn as sns
+    colors = sns.color_palette("coolwarm", len(m))
+    for i, mi in enumerate(m):
+        plt.plot(wave, mi, color=colors[i])
+    plt.xlim([900., 40000.])
+    plt.xscale('log')
+    plt.yscale('log')
+    plt.ylim([1e7, 1e9])
+    plt.savefig('template_spectra_plot.png')
+    plt.close(fig)
     spec = np.moveaxis(np.array(s), 0, 2)
     metallicities = args.metallicity_dict[args.isochrone]
     return ages, masses, wave, spec, np.array(metallicities)
 
 
 class fsps_freeparams:
-    ''' Allowing metallicity to be free '''
-    def __init__(self, met=-.39, met_lims=[-1.98, 0.2], met_delta=0.2,
+    ''' Allowing metallicity to be free -0.39'''
+    def __init__(self, met=-1.00, met_lims=[-1.98, 0.2], met_delta=0.2,
                  fix_met=False):
         ''' Initialize this class
 
