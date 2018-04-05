@@ -102,11 +102,11 @@ def parse_args(argv=None):
 
     parser.add_argument("-nw", "--nwalkers",
                         help='''Number of walkers for EMCEE''',
-                        type=float, default=None)
+                        type=int, default=None)
 
     parser.add_argument("-ns", "--nsteps",
                         help='''Number of steps for EMCEE''',
-                        type=float, default=None)
+                        type=int, default=None)
 
     parser.add_argument("-an", "--add_nebular",
                         help='''Add Nebular Emission''',
@@ -120,34 +120,47 @@ def parse_args(argv=None):
                         help='''Fix Metallicity''',
                         type=str, default=None)
 
+    parser.add_argument("-fd", "--fix_dust_em",
+                        help='''Fix Dust Emission''',
+                        type=str, default=None)
+
     parser.add_argument("-fe", "--floor_error",
                         help='''Error floor for photometry''',
                         type=float, default=None)
 
-    parser.add_argument("-Ns", "--nsamples",
+    parser.add_argument("-no", "--nobjects",
                         help='''Number of test objects''',
-                        type=float, default=None)
+                        type=int, default=None)
+
+    parser.add_argument("-p", "--parallel",
+                        help='''Running in parallel?''',
+                        type=bool, default=False)
+
+    parser.add_argument("-c", "--count",
+                        help='''Starting count for fake sources''',
+                        type=int, default=0)
 
     args = parser.parse_args(args=argv)
 
     # Use config values if none are set in the input
     arg_inputs = ['ssp', 'metallicity', 'isochrone', 'nwalkers', 'nsteps',
                   'add_nebular', 'logU', 'floor_error', 'fix_metallicity',
-                  'nsamples']
+                  'fix_dust_em', 'nobjects']
     for arg_i in arg_inputs:
         if getattr(args, arg_i) is None:
             setattr(args, arg_i, getattr(config, arg_i))
 
     # Copy list of config values to the args class
     config_copy_list = ['metallicity_dict', 'filt_dict', 'catalog_filter_dict',
-                        'filter_matrix_name', 'sfh', 'dust_law',
-                        'metallicity_mass_relationship']
+                        'filter_matrix_name', 'sfh', 'dust_law', 'dust_em',
+                        'metallicity_mass_relationship', 'catalog_maglim_dict']
 
     for con_copy in config_copy_list:
         setattr(args, con_copy, getattr(config, con_copy))
 
     args.log = setup_logging()
     args.fix_metallicity = str2bool(str(args.fix_metallicity), args.log)
+    args.fix_dust_em = str2bool(str(args.fix_dust_em), args.log)
 
     return args
 
@@ -181,7 +194,10 @@ def build_filter_matrix(args, wave):
             wv, through = np.loadtxt(op.join('FILTERS', args.filt_dict[i]),
                                      unpack=True)
             new_through = np.interp(wave, wv, through, 0.0, 0.0)
-            Fil_matrix[:, i] = new_through / np.sum(new_through)
+            S = np.sum(new_through)
+            if S == 0.:
+                S = 1.
+            Fil_matrix[:, i] = new_through / S
         np.savetxt(args.filter_matrix_name, Fil_matrix)
         return Fil_matrix
 
@@ -211,6 +227,31 @@ def get_test_filters(args):
     return filter_flag
 
 
+def get_maglim_filters(args):
+    '''Used in test mode, this function loops through args.filt_dict and
+    retrieves the 5-sigma magnitude limit for each filter (AB), and returns
+    the appropriate microjansky 1-sigma error.
+
+    Parameters
+    ----------
+    args : class
+        The args class is carried from function to function with information
+        from command line input and config.py
+
+    Returns
+    -------
+    photerror : numpy array (float)
+        Explained above.
+    '''
+    nfilters = len(args.filt_dict)
+    photerror = np.zeros((nfilters,), dtype=float)
+    for i in args.filt_dict.keys():
+        if i in args.catalog_filter_dict[args.test_field]:
+            maglim = args.catalog_maglim_dict[args.test_field][i]
+            photerror[i] = 10**(-0.4 * (maglim - 23.9)) / 5.
+    return photerror
+
+
 def read_input_file(args):
     '''This function reads a very specific input file and joins it with
     archived 3dhst catalogs.  The input file should have the following columns:
@@ -235,6 +276,7 @@ def read_input_file(args):
     '''
     F = np.loadtxt(args.filename, dtype={'names': ('field', 'id', 'z'),
                                          'formats': ('S6', 'i4', 'f4')})
+    F = np.atleast_1d(F)
     nobj = len(F['field'])
     fields = ['aegis', 'cosmos', 'goodsn', 'goodss', 'uds']
     name_base = '_3dhst.v4.1.cat.FITS'
@@ -349,6 +391,7 @@ def mock_data(args, mcsed_model, nsamples=5, phot_error=0.05):
         Mock input parameters for each fake galaxy, e.g. dust, sfh, mass
     '''
     # Build fake theta, set z, mass, age to get sfh_a
+    np.random.seed()
     thetas = mcsed_model.get_init_walker_values(num=nsamples, kind='ball')
     zobs = draw_uniform_dist(nsamples, 1.9, 2.35)
     params, y, yerr, true_y = [], [], [], []
@@ -357,7 +400,10 @@ def mock_data(args, mcsed_model, nsamples=5, phot_error=0.05):
         mcsed_model.set_new_redshift(z)
         mcsed_model.spectrum, mass = mcsed_model.build_csp()
         f_nu = mcsed_model.get_filter_fluxdensities()
-        f_nu_e = f_nu * phot_error
+        if args.test_field in args.catalog_maglim_dict.keys():
+            f_nu_e = get_maglim_filters(args)[mcsed_model.filter_flag]
+        else:
+            f_nu_e = f_nu * phot_error
         y.append(f_nu_e*np.random.randn(len(f_nu)) + f_nu)
         yerr.append(f_nu_e)
         true_y.append(f_nu)
@@ -366,7 +412,7 @@ def mock_data(args, mcsed_model, nsamples=5, phot_error=0.05):
     return y, yerr, zobs, params, true_y
 
 
-def main(argv=None):
+def main(argv=None, ssp_info=None):
     '''
     Execute the main functionality of MCSED
 
@@ -385,7 +431,11 @@ def main(argv=None):
     args = parse_args(argv)
 
     # Load Single Stellar Population model(s)
-    ages, masses, wave, SSP, met = read_ssp(args)
+    if ssp_info is None:
+        args.log.info('Reading in SSP model')
+        ages, masses, wave, SSP, met = read_ssp(args)
+    else:
+        ages, masses, wave, SSP, met = ssp_info
 
     # Build Filter Matrix
     filter_matrix = build_filter_matrix(args, wave)
@@ -393,13 +443,16 @@ def main(argv=None):
     # Make one instance of Mcsed for speed on initialization
     # Then replace the key variables each iteration for a given galaxy
     mcsed_model = Mcsed(filter_matrix, SSP, ages, masses, met, wave, args.sfh,
-                        args.dust_law, nwalkers=args.nwalkers,
+                        args.dust_law, args.dust_em, nwalkers=args.nwalkers,
                         nsteps=args.nsteps)
 
     # Special case of fixed metallicity
     if args.fix_metallicity:
         mcsed_model.ssp_class.fix_met = True
         mcsed_model.ssp_class.met = args.metallicity
+
+    if args.fix_dust_em:
+        mcsed_model.dust_em_class.fixed = True
 
     # Make output folder if it doesn't exist
     mkpath('output')
@@ -431,8 +484,9 @@ def main(argv=None):
         default = mcsed_model.get_params()
         y, yerr, z, truth, true_y = mock_data(args, mcsed_model,
                                               phot_error=args.floor_error,
-                                              nsamples=args.nsamples)
-        cnts = np.arange(len(z))
+                                              nsamples=args.nobjects)
+        cnts = np.arange(args.count, args.count + len(z))
+
         for yi, ye, zi, tr, ty, cnt in zip(y, yerr, z, truth, true_y, cnts):
             mcsed_model.input_params = tr
             mcsed_model.set_class_parameters(default)
@@ -442,7 +496,7 @@ def main(argv=None):
             mcsed_model.set_new_redshift(zi)
             mcsed_model.fit_model()
             mcsed_model.sample_plot('output/sample_fake_%05d' % cnt)
-            mcsed_model.triangle_plot('output/triangle_fake_%05d' % cnt)
+            # mcsed_model.triangle_plot('output/triangle_fake_%05d' % cnt)
             mcsed_model.table.add_row(['Test', cnt, zi] + [0.]*(len(labels)-3))
             last = mcsed_model.add_fitinfo_to_table(percentiles)
             mcsed_model.add_truth_to_table(tr, last)
@@ -462,8 +516,11 @@ def main(argv=None):
             mcsed_model.table.add_row([fd, oi, zi] + [0.]*(len(labels)-3))
             last = mcsed_model.add_fitinfo_to_table(percentiles)
             print(mcsed_model.table)
-    mcsed_model.table.write('output/%s' % args.output_filename,
-                            format='ascii.fixed_width_two_line',
-                            formats=formats, overwrite=True)
+    if args.parallel:
+        return [mcsed_model.table, formats]
+    else:
+        mcsed_model.table.write('output/%s' % args.output_filename,
+                                format='ascii.fixed_width_two_line',
+                                formats=formats, overwrite=True)
 if __name__ == '__main__':
     main()
