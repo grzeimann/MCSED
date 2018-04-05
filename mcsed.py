@@ -20,6 +20,7 @@
 import logging
 import sfh
 import dust_abs
+import dust_emission
 import ssp
 import cosmology
 import emcee
@@ -32,10 +33,10 @@ import matplotlib.pyplot as plt
 
 class Mcsed:
     def __init__(self, filter_matrix, ssp_spectra, ssp_ages, ssp_masses,
-                 ssp_met, wave, sfh_name, dust_abs_name, data_fnu=None,
-                 data_fnu_e=None, redshift=None, filter_flag=None,
-                 input_spectrum=None, input_params=None, sigma_m=0.1,
-                 nwalkers=40, nsteps=1000, true_fnu=None):
+                 ssp_met, wave, sfh_name, dust_abs_name, dust_em_name,
+                 data_fnu=None, data_fnu_e=None, redshift=None,
+                 filter_flag=None, input_spectrum=None, input_params=None,
+                 sigma_m=0.1, nwalkers=40, nsteps=1000, true_fnu=None):
         ''' Initialize the Mcsed class.
 
         Init
@@ -57,6 +58,8 @@ class Mcsed:
             Also, each class has a key function, sfh_class.evaluate(t), with
             the input of time in units of Gyrs
         dust_abs_class : class
+            This is the input class for dust absorption.
+        dust_em_class : class
             This is the input class for dust absorption.
         data_fnu : numpy array (1 dim)
             Photometry for data.  Length = (filter_flag == True).sum()
@@ -87,11 +90,14 @@ class Mcsed:
         self.ssp_masses = ssp_masses
         self.ssp_met = ssp_met
         self.wave = wave
+        self.dnu = np.abs(np.hstack([0., np.diff(2.99792e18 / self.wave)]))
         self.sfh_class = getattr(sfh, sfh_name)()
         self.dust_abs_class = getattr(dust_abs, dust_abs_name)()
         self.ssp_class = getattr(ssp, 'fsps_freeparams')()
+        self.dust_em_class = getattr(dust_emission, dust_em_name)()
         self.SSP = None
-        self.param_classes = ['sfh_class', 'dust_abs_class', 'ssp_class']
+        self.param_classes = ['sfh_class', 'dust_abs_class', 'ssp_class',
+                              'dust_em_class']
         self.data_fnu = data_fnu
         self.data_fnu_e = data_fnu_e
         self.redshift = redshift
@@ -195,6 +201,11 @@ class Mcsed:
         self.ssp_class.set_parameters_from_list(theta, start_value)
         start_value += self.ssp_class.nparams
 
+        ######################################################################
+        # DUST EMISSION
+        self.dust_em_class.set_parameters_from_list(theta, start_value)
+        start_value += self.dust_em_class.nparams
+
     def get_ssp_spectrum(self):
         '''
         Calculate SSP for an arbitrary metallicity (self.ssp_class.met) given a
@@ -263,6 +274,13 @@ class Mcsed:
         # Need to correct for dust attenuation
         Alam = self.dust_abs_class.evaluate(self.wave)
         spec_dustobscured = spec_dustfree * 10**(-0.4 * Alam)
+
+        # Change in bolometric Luminosity
+        L_bol = (np.dot(self.dnu, spec_dustfree) -
+                 np.dot(self.dnu, spec_dustobscured))
+
+        # Add dust emission
+        spec_dustobscured += L_bol * self.dust_em_class.evaluate(self.wave)
 
         # Redshift to observed frame
         csp = np.interp(self.wave, self.wave * (1. + self.redshift),
@@ -437,15 +455,15 @@ class Mcsed:
         new_chain[:, :, -1] = sampler.lnprobability
         self.samples = new_chain[:, burnin_step:, :].reshape((-1, ndim+2))
 
-    def spectrum_plot(self, ax, color=[0.996, 0.702, 0.031]):
+    def spectrum_plot(self, ax, color=[0.996, 0.702, 0.031], alpha=0.1):
         ''' Make spectum plot for current model '''
         spectrum, mass = self.build_csp()
-        ax.plot(self.wave, spectrum, color=color, alpha=0.1)
+        ax.plot(self.wave, spectrum, color=color, alpha=alpha)
 
     def add_subplots(self, fig, nsamples):
         ''' Add Subplots to Triangle plot below '''
         ax1 = fig.add_subplot(3, 1, 1)
-        ax1.set_position([0.7, 0.80, 0.25, 0.15])
+        ax1.set_position([0.7, 0.60, 0.25, 0.15])
         ax1.set_xscale('log')
         ax1.set_yscale('log')
         ax1.set_ylabel(r'SFR $M_{\odot} yr^{-1}$')
@@ -454,7 +472,7 @@ class Mcsed:
                       10**self.sfh_class.age_lims[1]])
         ax1.set_ylim([1e-5, 1e3])
         ax2 = fig.add_subplot(3, 1, 2)
-        ax2.set_position([0.7, 0.60, 0.25, 0.15])
+        ax2.set_position([0.7, 0.40, 0.25, 0.15])
         ax2.set_xscale('log')
         xtick_pos = [1000, 3000, 10000]
         xtick_lbl = ['1000', '3000', '10000']
@@ -465,36 +483,41 @@ class Mcsed:
         ax2.set_ylabel(r'Dust Attenuation (mag)')
         ax2.set_xlabel(r'Wavelength $\AA$')
         ax3 = fig.add_subplot(3, 1, 3)
-        ax3.set_position([0.38, 0.80, 0.25, 0.15])
+        ax3.set_position([0.38, 0.80, 0.57, 0.15])
         ax3.set_xscale('log')
         xtick_pos = [5000, 10000, 20000, 50000]
         xtick_lbl = ['0.5', '1', '2', '5']
+        # xtick_pos = np.arange(3000,  15001, 3000, dtype=int)
+        # xtick_lbl = [str(x) for x in xtick_pos]
         ax3.set_xticks(xtick_pos)
         ax3.set_xticklabels(xtick_lbl)
         ax3.set_xlim([3000, 80000])
+        wv = self.get_filter_wavelengths()
+        sel = np.where((wv > 3000.) * (wv < 80000.))[0]
         ax3.set_xlabel(r'Wavelength $\mu m$')
         ax3.set_ylabel(r'$F_{\nu}$ ($\mu$Jy)')
-        rndsamples = 100
+        rndsamples = 500
         for i in np.arange(rndsamples):
             ind = np.random.randint(0, nsamples.shape[0])
             self.set_class_parameters(nsamples[ind, :-2])
-            self.sfh_class.plot(ax1)
-            self.dust_abs_class.plot(ax2, self.wave)
-            self.spectrum_plot(ax3)
+            self.sfh_class.plot(ax1, alpha=0.05)
+            self.dust_abs_class.plot(ax2, self.wave, alpha=0.05)
+            self.spectrum_plot(ax3, alpha=0.05)
         if self.input_params is not None:
             self.set_class_parameters(self.input_params)
-            self.sfh_class.plot(ax1, color='k')
-            self.dust_abs_class.plot(ax2, self.wave, color='k')
-        wv = self.get_filter_wavelengths()
+            self.sfh_class.plot(ax1, color='k', alpha=1.0)
+            self.dust_abs_class.plot(ax2, self.wave, color='k', alpha=1.0)
+            self.spectrum_plot(ax3, color='k', alpha=0.5)
         if self.true_fnu is not None:
-            p = ax3.scatter(wv, self.true_fnu, marker='o', s=25,
+            p = ax3.scatter(wv, self.true_fnu, marker='o', s=150,
                             color=[0.216, 0.471, 0.749], zorder=9)
             p.set_facecolor('none')
         ax3.errorbar(wv, self.data_fnu, yerr=self.data_fnu_e, fmt='s',
-                     fillstyle='none', markersize=2,
+                     fillstyle='none', markersize=15,
                      color=[0.510, 0.373, 0.529], zorder=10)
-        ax3min = np.percentile(self.data_fnu, 5)
-        ax3max = np.percentile(self.data_fnu, 95)
+
+        ax3min = np.percentile(self.data_fnu[sel], 5)
+        ax3max = np.percentile(self.data_fnu[sel], 95)
         ax3ran = ax3max - ax3min
         ax3.set_ylim([ax3min - 0.4 * ax3ran, ax3max + 0.4 * ax3ran])
 
@@ -524,16 +547,16 @@ class Mcsed:
             truths = None
         percentilerange = [p for i, p in enumerate(self.get_param_lims())
                            if i >= o] + [[7, 11]]
-        percentilerange = [.98] * len(names)
+        percentilerange = [.925] * len(names)
         fig = corner.corner(nsamples[:, o:-1], labels=names,
                             range=percentilerange,
-                            truths=truths, truth_color='w',
+                            truths=truths, truth_color='gainsboro',
                             label_kwargs={"fontsize": 18}, show_titles=True,
                             title_kwargs={"fontsize": 16},
                             quantiles=[0.16, 0.5, 0.84], bins=30)
         # Adding subplots
         self.add_subplots(fig, nsamples)
-        fig.set_size_inches(15.0, 15.0)
+        # fig.set_size_inches(15.0, 15.0)
         fig.savefig("%s.png" % (outname), dpi=150)
         plt.close()
 
