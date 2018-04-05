@@ -9,15 +9,20 @@
 # SSP code for models
 ssp = 'fsps'  # options include: 'fsps'
 isochrone = 'padova'  # options include: 'padova'
-sfh = 'empirical_direct'  # options include: 'double_powerlaw', 'empirical'
-dust_law = 'calzetti'  # options include: 'noll', 'calzetti'
+# SFH options include: 'double_powerlaw', 'empirical_direct', 'constant'
+sfh = 'double_powerlaw'  
+dust_law = 'noll'  # options include: 'noll', 'calzetti'
+dust_em = 'DL07' # options include: 'DL07'
+
+# Fix dust emission parameters
+fix_dust_em = True
 
 # EMCEE parameters
 nwalkers = 100
 nsteps = 1000
 
 # Number of test objects
-nsamples = 5
+nobjects = 5
 
 # Nebular Emission Properties
 add_nebular = True
@@ -68,10 +73,10 @@ filt_dict = {0: 'SubB.res', 1: 'SubIB427.res', 2: 'SubIB445.res',
              66: 'ukidss_k', 67: 'newfirm_J1.res', 68: 'newfirm_J2.res',
              69: 'newfirm_J3.res', 70: 'newfirm_H1.res', 71: 'newfirm_H2.res',
              72: 'newfirm_Ks.res', 73: 'wircam_H.res', 74: 'wircam_J.res',
-             75: 'wircam_Ks.res'}
+             75: 'wircam_Ks.res', 76: 'MIPS24um.res'}
 
 # Catalog column name of filter and dictionary value to the filter file
-catalog_filter_dict = {}
+catalog_filter_dict, catalog_maglim_dict = {}, {}
 catalog_filter_dict['goodss'] = {1: 'ia427', 2: 'ia445', 6: 'ia505',
                                  7: 'ia527', 8: 'ia550', 9: 'ia574',
                                  10: 'ia598', 11: 'ia624', 12: 'ia651',
@@ -92,6 +97,13 @@ catalog_filter_dict['goodsn'] = {0: 'b', 19: 'f435w', 22: 'f125w', 23: 'f140w',
                                  51: 'rs', 52: 'v', 53: 'r', 54: 'i', 55: 'z',
                                  56: 'h', 57: 'j', 58: 'ks'}
 
+catalog_maglim_dict['goodsn'] = {0: 26.7, 19: 27.1, 22: 26.7, 23: 25.9,
+                                 24: 26.1, 26: 24.5, 27: 24.6,
+                                 34: 27.4, 36: 26.9, 38: 26.7,
+                                 45: 22.8, 46: 22.7, 49: 26.4, 50: 26.3,
+                                 51: 25.6, 52: 27.0, 53: 26.2, 54: 25.8,
+                                 55: 25.5, 56: 24.3, 57: 25.0, 58: 24.7}
+
 catalog_filter_dict['cosmos'] = {0: 'b', 1: 'ia427', 3: 'ia464', 4: 'i',
                                  5: 'ia484', 6: 'ia505', 7: 'ia527',
                                  9: 'ia574', 11: 'ia624', 13: 'ia679',
@@ -106,9 +118,32 @@ catalog_filter_dict['cosmos'] = {0: 'b', 1: 'ia427', 3: 'ia464', 4: 'i',
                                  68: 'j2', 69: 'j3', 70: 'h1', 71: 'h2',
                                  72: 'k', 73: 'h', 74: 'j', 75: 'ks'}
 
+catalog_maglim_dict['cosmos'] = {0: 27.9, 1: 26.3, 3: 25.8, 4: 27.0,
+                                 5: 26.4, 6: 26.2, 7: 26.5,
+                                 9: 25.7, 11: 26.4, 13: 25.9,
+                                 14: 26.1, 15: 25.7, 16: 25.6,
+                                 20: 26.7, 21: 26.5, 22: 26.1,
+                                 23: 25.5, 24: 25.8, 26: 25.1,
+                                 27: 25.0, 45: 21.6, 46: 21.6,
+                                 47: 26.0, 52: 27.2, 53: 27.3, 54: 27.0,
+                                 55: 25.8, 59: 26.7, 60: 27.2, 61: 27.2,
+                                 62: 26.0,
+                                 63: 25.7, 64: 24.9,
+                                 65: 25.4, 66: 25.0, 67: 24.7,
+                                 68: 24.5, 69: 24.4, 70: 23.7, 71: 23.6,
+                                 72: 23.7, 73: 24.0, 74: 23.8, 75: 23.8}
+
 catalog_filter_dict['aegis'] = {4: 'i', 20: 'f606w', 21: 'f814w', 22: 'f125w',
                                 23: 'f140w', 24: 'f160w', 26: 'irac1',
                                 27: 'irac2', 45: 'irac3', 46: 'irac4',
                                 59: 'u', 60: 'g', 61: 'r', 62: 'z',
                                 67: 'j1', 68: 'j2', 69: 'j3', 70: 'h1',
                                 71: 'h2', 72: 'k', 73: 'h', 74: 'j', 75: 'ks'}
+
+catalog_maglim_dict['aegis'] = {4: 27.0, 20: 26.8, 21: 26.4, 22: 26.3,
+                                23: 25.7, 24: 26.1, 26: 25.2,
+                                27: 25.1, 45: 22.6, 46: 22.6,
+                                59: 26.8, 60: 27.4, 61: 27.3, 62: 26.2,
+                                67: 24.8, 68: 24.5, 69: 24.4, 70: 23.8,
+                                71: 23.8, 72: 23.6, 73: 24.3, 74: 24.5,
+                                75: 24.0}
