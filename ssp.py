@@ -215,7 +215,7 @@ def read_ssp(args):
 
 class fsps_freeparams:
     ''' Allowing metallicity to be free -0.39'''
-    def __init__(self, met=-1.00, met_lims=[-1.98, 0.2], met_delta=0.2,
+    def __init__(self, met=-0.80, met_lims=[-1.98, 0.2], met_delta=0.3,
                  fix_met=False):
         ''' Initialize this class
 
