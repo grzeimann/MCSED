@@ -42,7 +42,7 @@ def calzettilaw(wave):
 class calzetti:
     ''' Calzetti Dust Law
     '''
-    def __init__(self, Av=0.7, Av_lims=[-0.2, 5.0], Av_delta=0.2):
+    def __init__(self, Av=0.8, Av_lims=[-0.2, 5.0], Av_delta=0.3):
         ''' Initialize Class
 
         Parameters
@@ -90,10 +90,10 @@ class calzetti:
         '''
         self.Av = input_list[start_value]
 
-    def plot(self, ax, wave, color=[0/255., 175/255., 202/255.]):
+    def plot(self, ax, wave, color=[0/255., 175/255., 202/255.], alpha=0.2):
         ''' Plot Dust Law for given set of parameters '''
         dust = self.evaluate(wave)
-        ax.plot(wave, dust, color=color, alpha=0.2)
+        ax.plot(wave, dust, color=color, alpha=alpha)
 
     def evaluate(self, wave):
         ''' Evaluate Dust Law
@@ -124,9 +124,9 @@ class noll:
         D(wave) = frac{E_b (wave,dellam)^2 }{(wave^2-lam0^2)^2
                      + (wave,dellam)^2}
     '''
-    def __init__(self, Av=0.7, delta=0.0, Eb=1.0, Av_lims=[-0.2, 3.0],
-                 delta_lims=[-1., 1.], Eb_lims=[-0.2, 6.], Av_delta=0.2,
-                 delta_delta=0.2, Eb_delta=0.4):
+    def __init__(self, Av=0.9, delta=0.0, Eb=2.5, Av_lims=[-0.2, 3.0],
+                 delta_lims=[-1., 1.], Eb_lims=[-0.2, 6.], Av_delta=0.4,
+                 delta_delta=0.3, Eb_delta=1.0):
         ''' Initialize Class
 
         Parameters
@@ -190,10 +190,10 @@ class noll:
         self.delta = input_list[start_value+1]
         self.Eb = input_list[start_value+2]
 
-    def plot(self, ax, wave, color=[0/255., 175/255., 202/255.]):
+    def plot(self, ax, wave, color=[0/255., 175/255., 202/255.], alpha=0.2):
         ''' Plot Dust Law for given set of parameters '''
         dust = self.evaluate(wave)
-        ax.plot(wave, dust, color=color, alpha=0.4)
+        ax.plot(wave, dust, color=color, alpha=alpha)
 
     def evaluate(self, wave):
         ''' Evaluate Dust Law
