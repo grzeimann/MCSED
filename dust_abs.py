@@ -124,8 +124,8 @@ class noll:
         D(wave) = frac{E_b (wave,dellam)^2 }{(wave^2-lam0^2)^2
                      + (wave,dellam)^2}
     '''
-    def __init__(self, Av=0.9, delta=0.0, Eb=2.5, Av_lims=[-0.2, 3.0],
-                 delta_lims=[-1., 1.], Eb_lims=[-0.2, 6.], Av_delta=0.4,
+    def __init__(self, EBV=0.3, delta=0.0, Eb=2.5, EBV_lims=[-0.05, 0.75],
+                 delta_lims=[-1., 1.], Eb_lims=[-0.2, 6.], EBV_delta=0.1,
                  delta_delta=0.3, Eb_delta=1.0):
         ''' Initialize Class
 
@@ -139,13 +139,13 @@ class noll:
             Strength of 2175A bump.  See equation above for the Drude profile,
             D(wave)
         '''
-        self.Av = Av
+        self.EBV = EBV
         self.delta = delta
         self.Eb = Eb
-        self.Av_lims = Av_lims
+        self.EBV_lims = EBV_lims
         self.delta_lims = delta_lims
         self.Eb_lims = Eb_lims
-        self.Av_delta = Av_delta
+        self.EBV_delta = EBV_delta
         self.delta_delta = delta_delta
         self.Eb_delta = Eb_delta
         self.nparams = 3
@@ -153,27 +153,27 @@ class noll:
 
     def get_params(self):
         ''' Return current parameters '''
-        return [self.Av, self.delta, self.Eb]
+        return [self.EBV, self.delta, self.Eb]
 
     def get_param_lims(self):
         ''' Return current parameter limits '''
-        return [self.Av_lims, self.delta_lims, self.Eb_lims]
+        return [self.EBV_lims, self.delta_lims, self.Eb_lims]
 
     def get_param_deltas(self):
         ''' Return current parameter deltas '''
-        return [self.Av_delta, self.delta_delta, self.Eb_delta]
+        return [self.EBV_delta, self.delta_delta, self.Eb_delta]
 
     def get_names(self):
         ''' Return names of each parameter '''
-        return ['$A_V$', '$\delta$', '$E_b$']
+        return ['E(B-V)', '$\delta$', '$E_b$']
 
     def prior(self):
         ''' Uniform prior based on boundaries '''
-        Av_flag = (self.Av > self.Av_lims[0])*(self.Av < self.Av_lims[1])
+        EBV_flag = (self.EBV > self.EBV_lims[0])*(self.EBV < self.EBV_lims[1])
         delta_flag = ((self.delta > self.delta_lims[0]) *
                       (self.delta < self.delta_lims[1]))
         Eb_flag = (self.Eb > self.Eb_lims[0])*(self.Eb < self.Eb_lims[1])
-        return Av_flag * delta_flag * Eb_flag
+        return EBV_flag * delta_flag * Eb_flag
 
     def set_parameters_from_list(self, input_list, start_value):
         ''' Set parameters from a list and a start_value
@@ -186,7 +186,7 @@ class noll:
         start_value : int
             initial index from list to read out parameters
         '''
-        self.Av = input_list[start_value]
+        self.EBV = input_list[start_value]
         self.delta = input_list[start_value+1]
         self.Eb = input_list[start_value+2]
 
@@ -214,5 +214,5 @@ class noll:
             self.calz = calzettilaw(wave)
         Dlam = (self.Eb * (wave*dellam)**2 /
                           ((wave**2-lam0**2)**2+(wave*dellam)**2))
-        Alam = (self.Av / 4.05 * (self.calz+Dlam)*(wave/5500)**(self.delta))
+        Alam = (self.EBV * (self.calz+Dlam)*(wave/5500)**(self.delta))
         return Alam
