@@ -155,6 +155,18 @@ class Mcsed:
             self.log.setLevel(logging.DEBUG)
             self.log.addHandler(handler)
 
+    def remove_lya_filters(self):
+        ''' FILL IN
+        '''
+        loc = np.searchsorted(self.wave, 1216. * (1. + self.redshift))
+        maxima = np.max(self.filter_matrix, axis=0)
+        newflag = self.filter_matrix[loc, :] < maxima * 0.1
+        maximas = np.max(self.filter_matrix[:, self.filter_flag], axis=0)
+        newflags = self.filter_matrix[loc, self.filter_flag] < maximas * 0.1
+        self.filter_flag = self.filter_flag * newflag
+        self.data_fnu = self.data_fnu[newflags]
+        self.data_fnu_e = self.data_fnu_e[newflags]
+
     def get_filter_wavelengths(self):
         ''' FILL IN
         '''
@@ -303,6 +315,15 @@ class Mcsed:
         else:
             return 0.0
 
+    def measure_hb(self):
+        ze = (1 + self.redshift) * 4861.
+        xl = np.searchsorted(self.wave, ze)
+        dnu = np.diff(3e18 / self.wave[xl-4:xl+5])
+        dnuA = 3e18 / ze - 3e18 / ((1 + self.redshift) * 4865.)
+        y = self.spectrum[xl-4:xl+4]
+        b = self.spectrum[xl-7]
+        return np.dot((y-b), np.abs(dnu)) / 1e29 + (b * dnuA / 1e29)
+
     def lnlike(self):
         ''' Calculate the log likelihood and return the value and stellar mass
         of the model
@@ -314,11 +335,18 @@ class Mcsed:
             The mass comes from building of the composite stellar population
         '''
         self.spectrum, mass = self.build_csp()
+        init_term = 0.0
+        self.hbflux = self.measure_hb()
+        if self.sfh_class.hblim is not None:
+            init_term = (-0.5 * (self.hbflux - self.sfh_class.hblim)**2 /
+                         self.sfh_class.hblim_error**2)
+            #if self.hbflux < np.min([self.sfh_class.hblim, 20e-17]):
+            #   return -np.inf, -np.inf
         model_y = self.get_filter_fluxdensities()
         inv_sigma2 = 1.0 / (self.data_fnu_e**2 + (model_y * self.sigma_m)**2)
         chi2_term = -0.5 * np.sum((self.data_fnu - model_y)**2 * inv_sigma2)
         parm_term = -0.5 * np.sum(np.log(1 / inv_sigma2))
-        return (chi2_term + parm_term, mass)
+        return (chi2_term + parm_term + init_term, mass)
 
     def lnprob(self, theta):
         ''' Calculate the log probabilty and return the value and stellar mass
@@ -457,13 +485,10 @@ class Mcsed:
 
     def spectrum_plot(self, ax, color=[0.996, 0.702, 0.031], alpha=0.1):
         ''' Make spectum plot for current model '''
-        spectrum, mass = self.build_csp()
-        ax.plot(self.wave, spectrum, color=color, alpha=alpha)
+        self.spectrum, mass = self.build_csp()
+        ax.plot(self.wave, self.spectrum, color=color, alpha=alpha)
 
-    def add_subplots(self, fig, nsamples):
-        ''' Add Subplots to Triangle plot below '''
-        ax1 = fig.add_subplot(3, 1, 1)
-        ax1.set_position([0.7, 0.60, 0.25, 0.15])
+    def add_sfr_plot(self, ax1):
         ax1.set_xscale('log')
         ax1.set_yscale('log')
         ax1.set_ylabel(r'SFR $M_{\odot} yr^{-1}$')
@@ -471,8 +496,8 @@ class Mcsed:
         ax1.set_xlim([10**-3,
                       10**self.sfh_class.age_lims[1]])
         ax1.set_ylim([1e-5, 1e3])
-        ax2 = fig.add_subplot(3, 1, 2)
-        ax2.set_position([0.7, 0.40, 0.25, 0.15])
+
+    def add_dust_plot(self, ax2):
         ax2.set_xscale('log')
         xtick_pos = [1000, 3000, 10000]
         xtick_lbl = ['1000', '3000', '10000']
@@ -482,27 +507,40 @@ class Mcsed:
         ax2.set_ylim([0, 8])
         ax2.set_ylabel(r'Dust Attenuation (mag)')
         ax2.set_xlabel(r'Wavelength $\AA$')
-        ax3 = fig.add_subplot(3, 1, 3)
-        ax3.set_position([0.38, 0.80, 0.57, 0.15])
+
+    def add_spec_plot(self, ax3):
         ax3.set_xscale('log')
         xtick_pos = [5000, 10000, 20000, 50000]
         xtick_lbl = ['0.5', '1', '2', '5']
-        # xtick_pos = np.arange(3000,  15001, 3000, dtype=int)
-        # xtick_lbl = [str(x) for x in xtick_pos]
         ax3.set_xticks(xtick_pos)
         ax3.set_xticklabels(xtick_lbl)
         ax3.set_xlim([3000, 80000])
-        wv = self.get_filter_wavelengths()
-        sel = np.where((wv > 3000.) * (wv < 80000.))[0]
         ax3.set_xlabel(r'Wavelength $\mu m$')
         ax3.set_ylabel(r'$F_{\nu}$ ($\mu$Jy)')
+
+    def add_subplots(self, ax1, ax2, ax3, nsamples):
+        ''' Add Subplots to Triangle plot below '''
+        wv = self.get_filter_wavelengths()
         rndsamples = 500
+        sp, fn, hbm = ([], [], [])
         for i in np.arange(rndsamples):
             ind = np.random.randint(0, nsamples.shape[0])
             self.set_class_parameters(nsamples[ind, :-2])
             self.sfh_class.plot(ax1, alpha=0.05)
             self.dust_abs_class.plot(ax2, self.wave, alpha=0.05)
             self.spectrum_plot(ax3, alpha=0.05)
+            fnu = self.get_filter_fluxdensities()
+            sp.append(self.spectrum * 1.)
+            fn.append(fnu * 1.)
+            hbm.append(self.hbflux * 1.)
+        # Plotting median value:
+        self.medianspec = np.median(np.array(sp), axis=0)
+        self.hbmedian = np.median(hbm)
+        ax3.plot(self.wave, self.medianspec, color='dimgray')
+        self.fluxwv = wv
+        self.fluxfn = np.median(np.array(fn), axis=0)
+        ax3.scatter(self.fluxwv, self.fluxfn, marker='x', s=200,
+                    color='dimgray', zorder=8)
         if self.input_params is not None:
             self.set_class_parameters(self.input_params)
             self.sfh_class.plot(ax1, color='k', alpha=1.0)
@@ -515,7 +553,7 @@ class Mcsed:
         ax3.errorbar(wv, self.data_fnu, yerr=self.data_fnu_e, fmt='s',
                      fillstyle='none', markersize=15,
                      color=[0.510, 0.373, 0.529], zorder=10)
-
+        sel = np.where((wv > 3000.) * (wv < 80000.))[0]
         ax3min = np.percentile(self.data_fnu[sel], 5)
         ax3max = np.percentile(self.data_fnu[sel], 95)
         ax3ran = ax3max - ax3min
@@ -547,7 +585,7 @@ class Mcsed:
             truths = None
         percentilerange = [p for i, p in enumerate(self.get_param_lims())
                            if i >= o] + [[7, 11]]
-        percentilerange = [.925] * len(names)
+        percentilerange = [.95] * len(names)
         fig = corner.corner(nsamples[:, o:-1], labels=names,
                             range=percentilerange,
                             truths=truths, truth_color='gainsboro',
@@ -555,10 +593,24 @@ class Mcsed:
                             title_kwargs={"fontsize": 16},
                             quantiles=[0.16, 0.5, 0.84], bins=30)
         # Adding subplots
-        self.add_subplots(fig, nsamples)
+        ax1 = fig.add_subplot(3, 1, 1)
+        ax1.set_position([0.7, 0.60, 0.25, 0.15])
+        ax2 = fig.add_subplot(3, 1, 2)
+        ax2.set_position([0.7, 0.40, 0.25, 0.15])
+        ax3 = fig.add_subplot(3, 1, 3)
+        ax3.set_position([0.38, 0.80, 0.57, 0.15])
+        self.add_sfr_plot(ax1)
+        self.add_dust_plot(ax2)
+        self.add_spec_plot(ax3)
+        self.add_subplots(ax1, ax2, ax3, nsamples)
+        if self.sfh_class.hblim is not None:
+            fig.text(.5, .75, r'H$\beta$ input: %0.2f' %
+                     (self.sfh_class.hblim * 1e17), fontsize=18)
+        fig.text(.5, .70, r'H$\beta$ model: %0.2f' % (self.hbmedian * 1e17),
+                 fontsize=18)
         # fig.set_size_inches(15.0, 15.0)
         fig.savefig("%s.png" % (outname), dpi=150)
-        plt.close()
+        plt.close(fig)
 
     def sample_plot(self, outname):
         ''' Make a sample plot
