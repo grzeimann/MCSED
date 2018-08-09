@@ -4,6 +4,7 @@
 
 """
 
+from __future__ import absolute_import
 import argparse as ap
 import numpy as np
 import os.path as op
@@ -14,6 +15,7 @@ from astropy.io import fits
 from astropy.table import Table
 from mcsed import Mcsed
 from distutils.dir_util import mkpath
+from cosmology import Cosmology
 
 
 def setup_logging():
@@ -128,6 +130,10 @@ def parse_args(argv=None):
                         help='''Error floor for photometry''',
                         type=float, default=None)
 
+    parser.add_argument("-hf", "--hblim_floor",
+                        help='''HB Error floor''',
+                        type=float, default=None)
+
     parser.add_argument("-no", "--nobjects",
                         help='''Number of test objects''',
                         type=int, default=None)
@@ -153,7 +159,8 @@ def parse_args(argv=None):
     # Copy list of config values to the args class
     config_copy_list = ['metallicity_dict', 'filt_dict', 'catalog_filter_dict',
                         'filter_matrix_name', 'sfh', 'dust_law', 'dust_em',
-                        'metallicity_mass_relationship', 'catalog_maglim_dict']
+                        'metallicity_mass_relationship', 'catalog_maglim_dict',
+                        'o3hbratio', 'hblim_floor']
 
     for con_copy in config_copy_list:
         setattr(args, con_copy, getattr(config, con_copy))
@@ -274,9 +281,7 @@ def read_input_file(args):
     flag : numpy array (2 dim)
         Flag set to True for filters in the catalog_filter_dict in config.py
     '''
-    F = np.loadtxt(args.filename, dtype={'names': ('field', 'id', 'z'),
-                                         'formats': ('S6', 'i4', 'f4')})
-    F = np.atleast_1d(F)
+    F = Table.read(args.filename, format='ascii')
     nobj = len(F['field'])
     fields = ['aegis', 'cosmos', 'goodsn', 'goodss', 'uds']
     name_base = '_3dhst.v4.1.cat.FITS'
@@ -291,6 +296,7 @@ def read_input_file(args):
     z = F['z']
     # convert from mag_zp = 25 to microjanskies (mag_zp = 23.9)
     fac = 10**(-0.4*(25.0-23.9))
+    hbflux = F['OIII_FLUX'] / args.o3hbratio * 1e-17
     for i, datum in enumerate(F):
         loc = datum[0].lower()
         for j, ind in enumerate(args.filt_dict.keys()):
@@ -323,7 +329,7 @@ def read_input_file(args):
                 y[i, j] = 0.0
                 yerr[i, j] = 0.0
                 flag[i, j] = False
-    return y, yerr, z, flag, F['id'], F['field']
+    return y, yerr, z, flag, F['obj_id'], F['field'], hbflux
 
 
 def draw_uniform_dist(nsamples, start, end):
@@ -394,14 +400,17 @@ def mock_data(args, mcsed_model, nsamples=5, phot_error=0.05):
     np.random.seed()
     thetas = mcsed_model.get_init_walker_values(num=nsamples, kind='ball')
     zobs = draw_uniform_dist(nsamples, 1.9, 2.35)
-    params, y, yerr, true_y = [], [], [], []
+    params, y, yerr, true_y, hlims = [], [], [], [], []
     for theta, z in zip(thetas, zobs):
         mcsed_model.set_class_parameters(theta)
         mcsed_model.set_new_redshift(z)
         mcsed_model.spectrum, mass = mcsed_model.build_csp()
+        hlims.append(mcsed_model.measure_hb())
+        args.log.info(hlims[-1]*1e17)
         f_nu = mcsed_model.get_filter_fluxdensities()
         if args.test_field in args.catalog_maglim_dict.keys():
             f_nu_e = get_maglim_filters(args)[mcsed_model.filter_flag]
+            f_nu_e = np.max([f_nu_e, f_nu * phot_error], axis=0)
         else:
             f_nu_e = f_nu * phot_error
         y.append(f_nu_e*np.random.randn(len(f_nu)) + f_nu)
@@ -409,7 +418,7 @@ def mock_data(args, mcsed_model, nsamples=5, phot_error=0.05):
         true_y.append(f_nu)
         params.append(list(theta) + [np.log10(mass)])
 
-    return y, yerr, zobs, params, true_y
+    return y, yerr, zobs, params, true_y, hlims
 
 
 def main(argv=None, ssp_info=None):
@@ -482,38 +491,66 @@ def main(argv=None, ssp_info=None):
     if args.test:
         mcsed_model.filter_flag = get_test_filters(args)
         default = mcsed_model.get_params()
-        y, yerr, z, truth, true_y = mock_data(args, mcsed_model,
-                                              phot_error=args.floor_error,
-                                              nsamples=args.nobjects)
+        y, yerr, z, truth, true_y, hlims = mock_data(args, mcsed_model,
+                                                     phot_error=args.floor_error,
+                                                     nsamples=args.nobjects)
+
         cnts = np.arange(args.count, args.count + len(z))
 
-        for yi, ye, zi, tr, ty, cnt in zip(y, yerr, z, truth, true_y, cnts):
+        for yi, ye, zi, tr, ty, cnt, hl in zip(y, yerr, z, truth, true_y, cnts,
+                                               hlims):
             mcsed_model.input_params = tr
             mcsed_model.set_class_parameters(default)
             mcsed_model.data_fnu = yi
             mcsed_model.data_fnu_e = ye
             mcsed_model.true_fnu = ty
             mcsed_model.set_new_redshift(zi)
-            mcsed_model.fit_model()
-            mcsed_model.sample_plot('output/sample_fake_%05d' % cnt)
-            # mcsed_model.triangle_plot('output/triangle_fake_%05d' % cnt)
+            for hh, let in zip([None, hl], ['a', 'b']):
+                mcsed_model.sfh_class.hblim = hh
+                mcsed_model.sfh_class.hblim_error = args.hblim_floor
+                mcsed_model.fit_model()
+                mcsed_model.sample_plot('output/sample_fake_%05d_%s' % (cnt, let))
+                mcsed_model.triangle_plot('output/triangle_fake_%05d_%s' % (cnt, let))
             mcsed_model.table.add_row(['Test', cnt, zi] + [0.]*(len(labels)-3))
             last = mcsed_model.add_fitinfo_to_table(percentiles)
             mcsed_model.add_truth_to_table(tr, last)
             print(mcsed_model.table)
     else:
-        y, yerr, z, flag, objid, field = read_input_file(args)
+        y, yerr, z, flag, objid, field, hb_lim = read_input_file(args)
         iv = mcsed_model.get_params()
-        for yi, ye, zi, fl, oi, fd in zip(y, yerr, z, flag, objid, field):
+        for yi, ye, zi, fl, oi, fd, hl in zip(y, yerr, z, flag, objid, field,
+                                              hb_lim):
             mcsed_model.filter_flag = fl
             mcsed_model.set_class_parameters(iv)
             mcsed_model.data_fnu = yi[fl]
             mcsed_model.data_fnu_e = ye[fl]
             mcsed_model.set_new_redshift(zi)
+            mcsed_model.sfh_class.hblim = hl
+            mcsed_model.remove_lya_filters()
             mcsed_model.fit_model()
             mcsed_model.sample_plot('output/sample_%s_%05d' % (fd, oi))
-            mcsed_model.triangle_plot('output/triangle_%s_%05d' % (fd, oi))
+            mcsed_model.triangle_plot('output/triangle_%s_%05d_%s' %
+                                      (fd, oi, args.sfh))
             mcsed_model.table.add_row([fd, oi, zi] + [0.]*(len(labels)-3))
+            names = mcsed_model.get_param_names()
+            names.append('Log Mass')
+            names.append('Ln Prob')
+            T = Table(mcsed_model.samples, names=names)
+            T.write('output/fitposterior_%s_%05d_%s.dat' % (fd, oi, args.sfh),
+                    overwrite=True, format='ascii.fixed_width_two_line')
+            T = Table([mcsed_model.wave, mcsed_model.medianspec],
+                      names=['wavelength', 'spectrum'])
+            T.write('output/bestfitspec_%s_%05d_%s.dat' % (fd, oi, args.sfh),
+                    overwrite=True, format='ascii.fixed_width_two_line')
+            T = Table([mcsed_model.fluxwv, mcsed_model.fluxfn],
+                      names=['wavelength', 'fluxdensity'])
+            T.write('output/bestfitflux_%s_%05d_%s.dat' % (fd, oi, args.sfh),
+                    overwrite=True, format='ascii.fixed_width_two_line')
+            T = Table([mcsed_model.fluxwv, mcsed_model.data_fnu,
+                       mcsed_model.data_fnu_e],
+                      names=['wavelength', 'fluxdensity', 'fluxdensityerror'])
+            T.write('output/observedflux_%s_%05d_%s.dat' % (fd, oi, args.sfh),
+                    overwrite=True, format='ascii.fixed_width_two_line')
             last = mcsed_model.add_fitinfo_to_table(percentiles)
             print(mcsed_model.table)
     if args.parallel:
