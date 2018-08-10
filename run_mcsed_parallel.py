@@ -68,8 +68,7 @@ def parallel_map(func, argv, args, ncpu, ssp_info, clean=False, **kwargs):
         datachunks = np.array_split(data, ncpu)
         for i, chunk in enumerate(datachunks):
             T = Table(chunk)
-            T.write('temp/temp_%i.dat' % i,
-                    format='ascii.fast_no_header', overwrite=True)
+            T.write('temp/temp_%i.dat' % i, format='ascii', overwrite=True)
         chunks = [argv + ['-f', 'temp/temp_%i.dat' % i]
                   for i, chunk in enumerate(datachunks)]
 
