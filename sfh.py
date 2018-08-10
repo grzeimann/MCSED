@@ -2,8 +2,10 @@
 
 
 1) Star Formation Histories:
-    a) double power law:
-    b) constant:
+    a) constant
+    b) exponential
+    c) double powerlaw
+    d) empirical
 
 .. moduleauthor:: Greg Zeimann <gregz@astro.as.utexas.edu>
 
