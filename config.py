@@ -10,12 +10,15 @@
 ssp = 'fsps'  # options include: 'fsps'
 isochrone = 'padova'  # options include: 'padova'
 # SFH options include: 'double_powerlaw', 'empirical_direct', 'constant'
-sfh = 'double_powerlaw'  
+sfh = 'constant'
 dust_law = 'noll'  # options include: 'noll', 'calzetti'
-dust_em = 'DL07' # options include: 'DL07'
+dust_em = 'DL07'  # options include: 'DL07'
 
 # Fix dust emission parameters
 fix_dust_em = True
+
+# OIII/Hbeta physical limit
+o3hbratio = 10.
 
 # EMCEE parameters
 nwalkers = 100
@@ -30,11 +33,12 @@ logU = -2.
 
 # Error floor under which we don't trust the error estimates (fraction)
 floor_error = 0.10
+hblim_floor = 1.05e-17
 
 # Use metallicity-mass relationship from Ma et al. 2016
 metallicity_mass_relationship = False
 # Fixed metallicity of SSP models if fit_metallicity is False
-fix_metallicity = False
+fix_metallicity = True
 metallicity = 0.0077  # for fixed metallicity
 
 # Dictionaries
@@ -89,6 +93,17 @@ catalog_filter_dict['goodss'] = {1: 'ia427', 2: 'ia445', 6: 'ia505',
                                  39: 'f850lpcand', 40: 'j', 41: 'tenisj',
                                  42: 'h', 43: 'tenisk', 44: 'ks', 45: 'irac3',
                                  46: 'irac4', 47: 'ia738', 48: 'ia797'}
+
+catalog_maglim_dict['goodsn'] = {1: 25.4, 2: 25.7, 6: 25.7, 7: 26.4, 8: 25.9,
+                                 9: 25.5, 10: 26.5, 11: 26.4, 12: 26.6,
+                                 13: 26.4, 15: 25.1, 17: 24.6, 19: 27.3,
+                                 20: 27.2, 21: 27.2, 22: 26.1, 23: 25.6,
+                                 24: 26.4, 26: 24.8, 27: 24.8, 28: 27.9,
+                                 29: 27.5, 30: 25.7, 31: 26.9, 32: 26.6,
+                                 34: 27.4, 35: 26.6, 37: 24.7, 38: 26.5,
+                                 39: 25.5, 40: 25.1, 41: 25.0, 42: 24.5,
+                                 43: 24.5, 44: 24.4, 45: 23.0, 46: 23.0,
+                                 47: 26.2, 48: 25.0}
 
 catalog_filter_dict['goodsn'] = {0: 'b', 19: 'f435w', 22: 'f125w', 23: 'f140w',
                                  24: 'f160w', 26: 'irac1', 27: 'irac2',
@@ -147,3 +162,14 @@ catalog_maglim_dict['aegis'] = {4: 27.0, 20: 26.8, 21: 26.4, 22: 26.3,
                                 67: 24.8, 68: 24.5, 69: 24.4, 70: 23.8,
                                 71: 23.8, 72: 23.6, 73: 24.3, 74: 24.5,
                                 75: 24.0}
+
+catalog_filter_dict['uds'] = {0: 'B', 20: 'f606w', 21: 'f814w', 22: 'f125w',
+                              23: 'f140w', 24: 'f160w', 26: 'irac1',
+                              27: 'irac2', 45: 'irac3', 46: 'irac4',
+                              52: 'V', 53: 'R', 54: 'i', 55: 'z',
+                              59: 'u', 64: 'H', 65: 'J', 66: 'K', }
+
+catalog_maglim_dict['uds'] = {0: 27.4, 20: 26.8, 21: 26.8, 22: 25.8, 23: 25.1,
+                              24: 25.9, 26: 24.6, 27: 24.4, 45: 21.7, 46: 21.5,
+                              52: 27.2, 53: 26.9, 54: 26.7, 55: 25.9, 59: 26.4,
+                              64: 24.3, 65: 25.1, 66: 24.9}
