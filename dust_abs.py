@@ -42,7 +42,7 @@ def calzettilaw(wave):
 class calzetti:
     ''' Calzetti Dust Law
     '''
-    def __init__(self, Av=0.8, Av_lims=[-0.2, 5.0], Av_delta=0.3):
+    def __init__(self, Av=0.2, Av_lims=[-0.2, 5.0], Av_delta=0.05):
         ''' Initialize Class
 
         Parameters
@@ -124,8 +124,8 @@ class noll:
         D(wave) = frac{E_b (wave,dellam)^2 }{(wave^2-lam0^2)^2
                      + (wave,dellam)^2}
     '''
-    def __init__(self, EBV=0.3, delta=0.0, Eb=2.5, EBV_lims=[-0.05, 0.75],
-                 delta_lims=[-1., 1.], Eb_lims=[-0.2, 6.], EBV_delta=0.1,
+    def __init__(self, EBV=0.15, delta=0.0, Eb=2.5, EBV_lims=[-0.05, 0.75],
+                 delta_lims=[-1., 1.], Eb_lims=[-0.2, 6.], EBV_delta=0.05,
                  delta_delta=0.3, Eb_delta=1.0):
         ''' Initialize Class
 
