@@ -159,13 +159,18 @@ class Mcsed:
         ''' FILL IN
         '''
         loc = np.searchsorted(self.wave, 1216. * (1. + self.redshift))
+        loc2 = np.searchsorted(self.wave, 60000.)
         maxima = np.max(self.filter_matrix, axis=0)
-        newflag = self.filter_matrix[loc, :] < maxima * 0.1
+        newflag = np.max(self.filter_matrix[:loc, :], axis=0) < maxima * 0.1
+        newflag2 = np.max(self.filter_matrix[loc2:, :], axis=0) < maxima * 0.1
         maximas = np.max(self.filter_matrix[:, self.filter_flag], axis=0)
-        newflags = self.filter_matrix[loc, self.filter_flag] < maximas * 0.1
-        self.filter_flag = self.filter_flag * newflag
-        self.data_fnu = self.data_fnu[newflags]
-        self.data_fnu_e = self.data_fnu_e[newflags]
+        newflags = np.max(self.filter_matrix[:loc, self.filter_flag], axis=0) < maximas * 0.1
+        newflags2 = np.max(self.filter_matrix[loc2:, self.filter_flag], axis=0) < maximas * 0.1
+        self.filter_flag = self.filter_flag * newflag * newflag2
+        if self.true_fnu is not None:
+            self.true_fnu = self.true_fnu[newflags * newflags2]
+        self.data_fnu = self.data_fnu[newflags*newflags2]
+        self.data_fnu_e = self.data_fnu_e[newflags*newflags2]
 
     def get_filter_wavelengths(self):
         ''' FILL IN
@@ -239,7 +244,7 @@ class Mcsed:
         self.SSP = np.dot(self.ssp_spectra, wei)
         return self.SSP
 
-    def build_csp(self):
+    def build_csp(self, sfr=None):
         '''Build a composite stellar population model for a given star
         formation history, dust attenuation law, and dust emission law.
 
@@ -254,7 +259,8 @@ class Mcsed:
         SSP = self.get_ssp_spectrum()
 
         # Need star formation rate from observation back to formation
-        sfr = self.sfh_class.evaluate(self.ssp_ages)
+        if sfr is None:
+            sfr = self.sfh_class.evaluate(self.ssp_ages)
         ageval = 10**self.sfh_class.age
 
         # ageval sets limit on ssp_ages that are useable in model calculation
@@ -339,9 +345,7 @@ class Mcsed:
         self.hbflux = self.measure_hb()
         if self.sfh_class.hblim is not None:
             init_term = (-0.5 * (self.hbflux - self.sfh_class.hblim)**2 /
-                         self.sfh_class.hblim_error**2)
-            #if self.hbflux < np.min([self.sfh_class.hblim, 20e-17]):
-            #   return -np.inf, -np.inf
+                         self.sfh_class.hblim_error**2) * 10.
         model_y = self.get_filter_fluxdensities()
         inv_sigma2 = 1.0 / (self.data_fnu_e**2 + (model_y * self.sigma_m)**2)
         chi2_term = -0.5 * np.sum((self.data_fnu - model_y)**2 * inv_sigma2)
@@ -493,9 +497,12 @@ class Mcsed:
         ax1.set_yscale('log')
         ax1.set_ylabel(r'SFR $M_{\odot} yr^{-1}$')
         ax1.set_xlabel('Lookback Time (Gyr)')
-        ax1.set_xlim([10**-3,
-                      10**self.sfh_class.age_lims[1]])
-        ax1.set_ylim([1e-5, 1e3])
+        ax1.set_xticks([1e-3, 1e-2, 1e-1, 1])
+        ax1.set_xticklabels(['1 Myr', '10 Myr', '100 Myr', '1 Gyr'])
+        ax1.set_yticks([1e-3, 1e-2, 1e-1, 1, 1e1, 1e2, 1e3])
+        ax1.set_yticklabels(['0.001', '0.01', '0.1', '1', '10', '100', '1000'])
+        ax1.set_xlim([10**-3, 10**self.sfh_class.age_lims[1]])
+        ax1.set_ylim([1e-3, 1e3])
 
     def add_dust_plot(self, ax2):
         ax2.set_xscale('log')
@@ -510,25 +517,25 @@ class Mcsed:
 
     def add_spec_plot(self, ax3):
         ax3.set_xscale('log')
-        xtick_pos = [5000, 10000, 20000, 50000]
-        xtick_lbl = ['0.5', '1', '2', '5']
+        xtick_pos = [3000, 5000, 10000, 20000, 40000]
+        xtick_lbl = ['0.3', '0.5', '1', '2', '4']
         ax3.set_xticks(xtick_pos)
         ax3.set_xticklabels(xtick_lbl)
-        ax3.set_xlim([3000, 80000])
+        ax3.set_xlim([3000, 50000])
         ax3.set_xlabel(r'Wavelength $\mu m$')
         ax3.set_ylabel(r'$F_{\nu}$ ($\mu$Jy)')
 
     def add_subplots(self, ax1, ax2, ax3, nsamples):
         ''' Add Subplots to Triangle plot below '''
         wv = self.get_filter_wavelengths()
-        rndsamples = 500
+        rndsamples = 200
         sp, fn, hbm = ([], [], [])
         for i in np.arange(rndsamples):
             ind = np.random.randint(0, nsamples.shape[0])
             self.set_class_parameters(nsamples[ind, :-2])
-            self.sfh_class.plot(ax1, alpha=0.05)
-            self.dust_abs_class.plot(ax2, self.wave, alpha=0.05)
-            self.spectrum_plot(ax3, alpha=0.05)
+            self.sfh_class.plot(ax1, alpha=0.1)
+            self.dust_abs_class.plot(ax2, self.wave, alpha=0.1)
+            self.spectrum_plot(ax3, alpha=0.1)
             fnu = self.get_filter_fluxdensities()
             sp.append(self.spectrum * 1.)
             fn.append(fnu * 1.)
@@ -541,6 +548,8 @@ class Mcsed:
         self.fluxfn = np.median(np.array(fn), axis=0)
         ax3.scatter(self.fluxwv, self.fluxfn, marker='x', s=200,
                     color='dimgray', zorder=8)
+        chi2 = (1. / (len(self.data_fnu) - 1) *
+                (((self.data_fnu - self.fluxfn) / self.data_fnu_e)**2).sum())
         if self.input_params is not None:
             self.set_class_parameters(self.input_params)
             self.sfh_class.plot(ax1, color='k', alpha=1.0)
@@ -553,11 +562,13 @@ class Mcsed:
         ax3.errorbar(wv, self.data_fnu, yerr=self.data_fnu_e, fmt='s',
                      fillstyle='none', markersize=15,
                      color=[0.510, 0.373, 0.529], zorder=10)
-        sel = np.where((wv > 3000.) * (wv < 80000.))[0]
+        
+        sel = np.where((wv > 3000.) * (wv < 50000.))[0]
         ax3min = np.percentile(self.data_fnu[sel], 5)
         ax3max = np.percentile(self.data_fnu[sel], 95)
         ax3ran = ax3max - ax3min
         ax3.set_ylim([ax3min - 0.4 * ax3ran, ax3max + 0.4 * ax3ran])
+        ax3.text(4200, ax3max + 0.2 * ax3ran, r'${\chi}_{\nu}^2 = $%0.2f' % chi2)
 
     def triangle_plot(self, outname, lnprobcut=7.5):
         ''' Make a triangle corner plot for samples from fit
