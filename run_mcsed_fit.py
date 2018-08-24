@@ -296,7 +296,8 @@ def read_input_file(args):
     z = F['z']
     # convert from mag_zp = 25 to microjanskies (mag_zp = 23.9)
     fac = 10**(-0.4*(25.0-23.9))
-    hbflux = F['OIII_FLUX'] / args.o3hbratio * 1e-17
+    hbflux = F['Hb_FLUX'] * 1e-17
+    hbeflux = F['Hb_ERR'] * 1e-17
     for i, datum in enumerate(F):
         loc = datum[0].lower()
         for j, ind in enumerate(args.filt_dict.keys()):
@@ -329,7 +330,7 @@ def read_input_file(args):
                 y[i, j] = 0.0
                 yerr[i, j] = 0.0
                 flag[i, j] = False
-    return y, yerr, z, flag, F['obj_id'], F['field'], hbflux
+    return y, yerr, z, flag, F['obj_id'], F['field'], hbflux, hbeflux
 
 
 def draw_uniform_dist(nsamples, start, end):
@@ -406,7 +407,7 @@ def mock_data(args, mcsed_model, nsamples=5, phot_error=0.05):
         mcsed_model.set_new_redshift(z)
         mcsed_model.spectrum, mass = mcsed_model.build_csp()
         hlims.append(mcsed_model.measure_hb())
-        args.log.info(hlims[-1]*1e17)
+        args.log.info('%0.2f, %0.2f' % (hlims[-1]*1e17, np.log10(mass)))
         f_nu = mcsed_model.get_filter_fluxdensities()
         if args.test_field in args.catalog_maglim_dict.keys():
             f_nu_e = get_maglim_filters(args)[mcsed_model.filter_flag]
@@ -489,7 +490,8 @@ def main(argv=None, ssp_info=None):
 
     # MAIN FUNCTIONALITY
     if args.test:
-        mcsed_model.filter_flag = get_test_filters(args)
+        fl = get_test_filters(args)
+        mcsed_model.filter_flag = fl * True
         default = mcsed_model.get_params()
         y, yerr, z, truth, true_y, hlims = mock_data(args, mcsed_model,
                                                      phot_error=args.floor_error,
@@ -500,37 +502,40 @@ def main(argv=None, ssp_info=None):
         for yi, ye, zi, tr, ty, cnt, hl in zip(y, yerr, z, truth, true_y, cnts,
                                                hlims):
             mcsed_model.input_params = tr
+            mcsed_model.filter_flag = fl * True
             mcsed_model.set_class_parameters(default)
             mcsed_model.data_fnu = yi
             mcsed_model.data_fnu_e = ye
             mcsed_model.true_fnu = ty
             mcsed_model.set_new_redshift(zi)
-            for hh, let in zip([None, hl], ['a', 'b']):
+            mcsed_model.remove_lya_filters()
+            for hh, let in zip([hl, None], ['a']):#, 'b']):
                 mcsed_model.sfh_class.hblim = hh
                 mcsed_model.sfh_class.hblim_error = args.hblim_floor
                 mcsed_model.fit_model()
                 mcsed_model.sample_plot('output/sample_fake_%05d_%s' % (cnt, let))
-                mcsed_model.triangle_plot('output/triangle_fake_%05d_%s' % (cnt, let))
+                mcsed_model.triangle_plot('output/triangle_fake_%05d_%s_%s_%s' % (cnt, let, args.sfh, args.dust_law))
             mcsed_model.table.add_row(['Test', cnt, zi] + [0.]*(len(labels)-3))
             last = mcsed_model.add_fitinfo_to_table(percentiles)
             mcsed_model.add_truth_to_table(tr, last)
             print(mcsed_model.table)
     else:
-        y, yerr, z, flag, objid, field, hb_lim = read_input_file(args)
+        y, yerr, z, flag, objid, field, hb_lim, hbe_lim = read_input_file(args)
         iv = mcsed_model.get_params()
-        for yi, ye, zi, fl, oi, fd, hl in zip(y, yerr, z, flag, objid, field,
-                                              hb_lim):
+        for yi, ye, zi, fl, oi, fd, hl, hle in zip(y, yerr, z, flag, objid,
+                                                   field, hb_lim, hbe_lim):
             mcsed_model.filter_flag = fl
             mcsed_model.set_class_parameters(iv)
             mcsed_model.data_fnu = yi[fl]
             mcsed_model.data_fnu_e = ye[fl]
             mcsed_model.set_new_redshift(zi)
             mcsed_model.sfh_class.hblim = hl
+            mcsed_model.sfh_class.hblim_error = hle
             mcsed_model.remove_lya_filters()
             mcsed_model.fit_model()
             mcsed_model.sample_plot('output/sample_%s_%05d' % (fd, oi))
-            mcsed_model.triangle_plot('output/triangle_%s_%05d_%s' %
-                                      (fd, oi, args.sfh))
+            mcsed_model.triangle_plot('output/triangle_%s_%05d_%s_%s' %
+                                      (fd, oi, args.sfh, args.dust_law))
             mcsed_model.table.add_row([fd, oi, zi] + [0.]*(len(labels)-3))
             names = mcsed_model.get_param_names()
             names.append('Log Mass')
