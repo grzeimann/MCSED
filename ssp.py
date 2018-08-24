@@ -199,13 +199,14 @@ def read_ssp(args):
         m.append(np.dot(spec, wei)/spec.shape[1])
     fig = plt.figure(figsize=(8, 8))
     import seaborn as sns
-    colors = sns.color_palette("coolwarm", len(m))
-    for i, mi in enumerate(m):
-        plt.plot(wave, mi, color=colors[i])
+    colors = sns.color_palette("coolwarm", s[-5].shape[1])
+    wei = np.diff(np.hstack([0., ages]))
+    for i in np.arange(s[-5].shape[1]):
+        plt.plot(wave, s[-5][:, i] * wei[i] / 1e8, color=colors[i])
     plt.xlim([900., 40000.])
     plt.xscale('log')
     plt.yscale('log')
-    plt.ylim([1e7, 1e9])
+    plt.ylim([1e-5, 10])
     plt.savefig('template_spectra_plot.png')
     plt.close(fig)
     spec = np.moveaxis(np.array(s), 0, 2)
