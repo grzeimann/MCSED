@@ -345,7 +345,7 @@ class Mcsed:
         self.hbflux = self.measure_hb()
         if self.sfh_class.hblim is not None:
             init_term = (-0.5 * (self.hbflux - self.sfh_class.hblim)**2 /
-                         self.sfh_class.hblim_error**2) * 10.
+                         self.sfh_class.hblim_error**2) * 1.
         model_y = self.get_filter_fluxdensities()
         inv_sigma2 = 1.0 / (self.data_fnu_e**2 + (model_y * self.sigma_m)**2)
         chi2_term = -0.5 * np.sum((self.data_fnu - model_y)**2 * inv_sigma2)
