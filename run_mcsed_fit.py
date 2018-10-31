@@ -485,7 +485,7 @@ def main(argv=None, ssp_info=None):
             formats[labels[-1]] = '%0.3f'
     formats['Field'], formats['ID'] = ('%s', '%04d')
 
-    mcsed_model.table = Table(names=labels, dtype=['S5', 'i4'] +
+    mcsed_model.table = Table(names=labels, dtype=['S7', 'i4'] +
                               ['f8']*(len(labels)-2))
 
     # MAIN FUNCTIONALITY
