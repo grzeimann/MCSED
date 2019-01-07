@@ -90,6 +90,14 @@ def parse_args(argv=None):
                         help='''Isochrone for SSP model, e.g. padova''',
                         type=str, default=None)
 
+    parser.add_argument("-sfh", "--sfh",
+                        help='''Star formation history, e.g. constant''',
+                        type=str, default=None)
+
+    parser.add_argument("-dl", "--dust_law",
+                        help='''Dust law, e.g. calzetti''',
+                        type=str, default=None)
+
     parser.add_argument("-t", "--test",
                         help='''Test script with fake data''',
                         action="count", default=0)
@@ -149,7 +157,8 @@ def parse_args(argv=None):
     args = parser.parse_args(args=argv)
 
     # Use config values if none are set in the input
-    arg_inputs = ['ssp', 'metallicity', 'isochrone', 'nwalkers', 'nsteps',
+    arg_inputs = ['ssp', 'metallicity', 'isochrone', 'sfh', 'dust_law',
+                  'nwalkers', 'nsteps',
                   'add_nebular', 'logU', 'floor_error', 'fix_metallicity',
                   'fix_dust_em', 'nobjects']
     for arg_i in arg_inputs:
@@ -158,7 +167,7 @@ def parse_args(argv=None):
 
     # Copy list of config values to the args class
     config_copy_list = ['metallicity_dict', 'filt_dict', 'catalog_filter_dict',
-                        'filter_matrix_name', 'sfh', 'dust_law', 'dust_em',
+                        'filter_matrix_name', 'dust_em',
                         'metallicity_mass_relationship', 'catalog_maglim_dict',
                         'o3hbratio', 'hblim_floor']
 
@@ -168,6 +177,7 @@ def parse_args(argv=None):
     args.log = setup_logging()
     args.fix_metallicity = str2bool(str(args.fix_metallicity), args.log)
     args.fix_dust_em = str2bool(str(args.fix_dust_em), args.log)
+
 
     return args
 
