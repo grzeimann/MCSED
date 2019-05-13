@@ -10,7 +10,7 @@
 ssp = 'fsps'  # options include: 'fsps'
 isochrone = 'padova'  # options include: 'padova'
 # SFH options include: 'double_powerlaw', 'empirical_direct', 'constant'
-sfh = 'constant'
+sfh = 'double_powerlaw'
 dust_law = 'noll'  # options include: 'noll', 'calzetti'
 dust_em = 'DL07'  # options include: 'DL07'
 
