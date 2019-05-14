@@ -68,7 +68,7 @@ def parse_args(argv=None):
     -------
     args : class
         args class has attributes of each input, i.e., args.filename
-        as well as astributes from the config file
+        as well as attributes from the config file
     '''
 
     parser = ap.ArgumentParser(description="MCSED",
