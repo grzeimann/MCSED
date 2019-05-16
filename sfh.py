@@ -36,6 +36,7 @@ class constant:
             sigma to draw from a normal distribution when simulating galaxies
         age_delta : float
             sigma to draw from a normal distribution when simulating galaxies
+        hblim : WPB FILL IN 
         '''
         self.logsfr = logsfr
         self.age = age

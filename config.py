@@ -1,6 +1,5 @@
 """ MCSED - config.py
 
-
 1) Configuration Settings
 
 .. moduleauthor:: Greg Zeimann <gregz@astro.as.utexas.edu>
@@ -10,44 +9,90 @@
 ssp = 'fsps'  # options include: 'fsps'
 isochrone = 'padova'  # options include: 'padova'
 # SFH options include: 'double_powerlaw', 'empirical_direct', 'constant'
-sfh = 'double_powerlaw'
-dust_law = 'noll'  # options include: 'noll', 'calzetti'
+sfh = 'constant'
+dust_law = 'calzetti'  # options include: 'noll', 'calzetti'
 dust_em = 'DL07'  # options include: 'DL07'
 
-# Fix dust emission parameters
-fix_dust_em = True
+# Dust attenuation law parameters
+Rv = 4.05 # extinction factor; Rv=4.05 is the default value for Calzetti law
+# factor between E(B-V)_stars and E(B-V)_gas, 
+# such that E(B-V)_stars = EBV_stars_gas * E(B-V)_gas
+EBV_stars_gas = 0.44 # default value for calzetti law
+
+# Fit dust emission parameters
+# If True, fit the dust emission component. 
+# If False, remove all filters redward of rest-frame wave_dust_em microns 
+# and fix dust emission parameters to umin=2.0, gamma=0.05, qpah=2.5 
+fit_dust_em = False
+wave_dust_em = 2.5 # rest-frame wavelength in microns 
 
 # OIII/Hbeta physical limit
+# WPB: NOTE: currently not used anywhere....
 o3hbratio = 10.
 
 # EMCEE parameters
-nwalkers = 100
-nsteps = 1000
+nwalkers = 10 # 100
+nsteps = 100 # 1000
 
 # Number of test objects
 nobjects = 5
 
 # Nebular Emission Properties
+# The ionization parameter, logU, is held fixed
 add_nebular = True
 logU = -2.
 
-# Error floor under which we don't trust the error estimates (fraction)
-floor_error = 0.10
+# Error floor under which we don't trust the error estimates 
+# minimum photometric error (fractional uncertainty in units of specific flux)
+# WPBWPB - only used in test mode, or always? I think always...
+floor_error = 0.10 
+# minimum emission line error (absolute uncertainty in units of ergs / s / cm2)
+# WPB: NOTE: currently only used in test mode
 hblim_floor = 0.65e-17
 
+# Use input photometry and emission lines
+# If True, use data provided in the input file
+# else, ignore input data (in which case input IDs must match Skelton+14 IDs)
+# WPBWPB maybe delete this option and just use whatever appears in the input file...
+input_phot = False
+
 # Use metallicity-mass relationship from Ma et al. 2016
+# NOTE: currently unavailable
 metallicity_mass_relationship = False
-# Fixed metallicity of SSP models if fit_metallicity is False
-fix_metallicity = True
-metallicity = 0.0077  # for fixed metallicity
+
+# If False, leave metallicity as a free parameter
+# else, must be float: fixed metallicity of SSP models
+# if True, metallicity is fixed at 0.0077 (38.5% solar)
+metallicity = 0.0077  # float for fixed metallicity, False for free metallicity
+
+# Output files
+# refer to XXXXX for description of each file
+# 'image format' is the file type extension of the figures
+#    Supported formats: eps, pdf, pgf, png, ps, raw, rgba, svg, svgz
+output_dict = {'parameters'    : True, 
+               'fitposterior'  : True,
+               'bestfitspec'   : True,
+               'bestfitflux'   : True,
+               'observedflux'  : True,
+               'triangle plot' : True,
+               'sample plot'   : True,
+               'image format'  : 'png'}
+
+# percentiles of each parameter to report in the output file
+param_percentiles = [5, 16, 50, 84, 95]
+
+
+
+
 
 # Dictionaries
+# WPB: description for this section, overall organization...
 metallicity_dict = {'padova': [0.0002, 0.0003, 0.0004, 0.0005, 0.0006, 0.0008,
                                0.0010, 0.0012, 0.0016, 0.0020, 0.0025, 0.0031,
                                0.0039, 0.0049, 0.0061, 0.0077, 0.0096, 0.0120,
                                0.0150, 0.0190, 0.0240, 0.0300]}
 
-# FILTERS
+# Filter information from the Skelton+14 catalog
 
 # Common filter file names in FILTERS folder
 filter_matrix_name = 'standard_filter_matrix.txt'

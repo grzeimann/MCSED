@@ -1,4 +1,4 @@
-""" Script for running MCSED
+""" script for running MCSED
 
 .. moduleauthor:: Greg Zeimann <gregz@astro.as.utexas.edu>
 
@@ -51,9 +51,9 @@ def str2bool(v, log):
     elif v.lower() in ('no', 'false', 'f', 'n', '0'):
         return False
     else:
-        log.warning('Could not interpret "fix_metallicity" argument, by '
-                    'default it will be set to True')
-        return True
+        log.warning('Could not interpret "metallicity" argument, by '
+                    'default it will be set to False')
+        return False
 
 
 def parse_args(argv=None):
@@ -68,7 +68,7 @@ def parse_args(argv=None):
     -------
     args : class
         args class has attributes of each input, i.e., args.filename
-        as well as attributes from the config file
+        as well as astributes from the config file
     '''
 
     parser = ap.ArgumentParser(description="MCSED",
@@ -83,8 +83,8 @@ def parse_args(argv=None):
                         type=str, default=None)
 
     parser.add_argument("-z", "--metallicity",
-                        help='''Metallicity for SSP models, 0.02 is solar''',
-                        type=float, default=None)
+                        help='''Fixed metallicity for SSP models (0.02 is solar), False if free parameter''',
+                        type=str, default=None)
 
     parser.add_argument("-i", "--isochrone",
                         help='''Isochrone for SSP model, e.g. padova''',
@@ -126,12 +126,8 @@ def parse_args(argv=None):
                         help='''Ionization Parameter for nebular gas''',
                         type=float, default=None)
 
-    parser.add_argument("-fm", "--fix_metallicity",
-                        help='''Fix Metallicity''',
-                        type=str, default=None)
-
-    parser.add_argument("-fd", "--fix_dust_em",
-                        help='''Fix Dust Emission''',
+    parser.add_argument("-fd", "--fit_dust_em",
+                        help='''Fit Dust Emission''',
                         type=str, default=None)
 
     parser.add_argument("-fe", "--floor_error",
@@ -159,8 +155,8 @@ def parse_args(argv=None):
     # Use config values if none are set in the input
     arg_inputs = ['ssp', 'metallicity', 'isochrone', 'sfh', 'dust_law',
                   'nwalkers', 'nsteps',
-                  'add_nebular', 'logU', 'floor_error', 'fix_metallicity',
-                  'fix_dust_em', 'nobjects']
+                  'add_nebular', 'logU', 'floor_error', 
+                  'fit_dust_em', 'nobjects']
     for arg_i in arg_inputs:
         if getattr(args, arg_i) is None:
             setattr(args, arg_i, getattr(config, arg_i))
@@ -169,15 +165,26 @@ def parse_args(argv=None):
     config_copy_list = ['metallicity_dict', 'filt_dict', 'catalog_filter_dict',
                         'filter_matrix_name', 'dust_em',
                         'metallicity_mass_relationship', 'catalog_maglim_dict',
-                        'o3hbratio', 'hblim_floor']
+                        'o3hbratio', 'hblim_floor',
+                        'fit_dust_em', 'wave_dust_em',
+                        'Rv', 'EBV_stars_gas',
+                        'output_dict', 'param_percentiles']
 
     for con_copy in config_copy_list:
         setattr(args, con_copy, getattr(config, con_copy))
 
     args.log = setup_logging()
-    args.fix_metallicity = str2bool(str(args.fix_metallicity), args.log)
-    args.fix_dust_em = str2bool(str(args.fix_dust_em), args.log)
+    args.fit_dust_em = str2bool(str(args.fit_dust_em), args.log)
 
+    # Set metallicity as free or fixed parameter
+    try:
+        if args.metallicity not in ['0','1']:
+            args.metallicity = float(args.metallicity)
+    except ValueError:
+        args.metallicity = str2bool(str(args.metallicity),args.log)
+        if args.metallicity:
+            print("Fixing metallicity at z = 0.0077")
+            args.metallicity = 0.0077
 
     return args
 
@@ -272,6 +279,7 @@ def get_maglim_filters(args):
 def read_input_file(args):
     '''This function reads a very specific input file and joins it with
     archived 3dhst catalogs.  The input file should have the following columns:
+    WPB
     FIELD, ID, Z
 
     Parameters
@@ -282,6 +290,7 @@ def read_input_file(args):
 
     Returns
     -------
+    WPB: unit check: f_nu in microJy ?
     y : numpy array (2 dim)
         Photometric magnitudes from the 3DHST survey for each input source
     yerr : numpy array (2 dim)
@@ -290,7 +299,14 @@ def read_input_file(args):
         Redshift from the file returned as a numpy array
     flag : numpy array (2 dim)
         Flag set to True for filters in the catalog_filter_dict in config.py
+    em : Astropy Table (2 dim)
+        Emission line fluxes in ergs / cm2 / s
+        Possible lines: [O II]3727, HBeta, [O III]5007, HAlpha
+    emerr : Astropy Table (2 dim)
+        Emission line errors in ergs / cm2 / s 
     '''
+    # WPB: check if ID is of form skelton: if yes, grab from catalogs
+    # else, check input units and convert appropriately
     F = Table.read(args.filename, format='ascii')
     nobj = len(F['field'])
     fields = ['aegis', 'cosmos', 'goodsn', 'goodss', 'uds']
@@ -303,11 +319,27 @@ def read_input_file(args):
     y = np.zeros((nobj, nfilters))
     yerr = np.zeros((nobj, nfilters))
     flag = np.zeros((nobj, nfilters), dtype=bool)
+
+    # redshift array
     z = F['z']
+
     # convert from mag_zp = 25 to microjanskies (mag_zp = 23.9)
     fac = 10**(-0.4*(25.0-23.9))
-    hbflux = F['Hb_FLUX'] * 1e-17
-    hbeflux = F['Hb_ERR'] * 1e-17
+
+    # read in emission line fluxes, if provided
+    fill_value = -99 # should always be set to -99
+    emline_factor = 1e-17
+    em, emerr = Table(), Table()
+    for emline in ['OII', 'Hb', 'OIII', 'Ha']:
+        colname, ecolname = '%s_FLUX' % emline, '%s_ERR' % emline
+        try:
+            em[colname]     = F[colname]  * emline_factor
+            emerr[ecolname] = F[ecolname] * emline_factor
+            print('Reading %s line fluxes from input file' % emline)
+        except KeyError:
+            em[colname]     = np.full(len(F), fill_value)
+            emerr[ecolname] = np.full(len(F), fill_value)
+
     for i, datum in enumerate(F):
         loc = datum[0].lower()
         for j, ind in enumerate(args.filt_dict.keys()):
@@ -340,7 +372,7 @@ def read_input_file(args):
                 y[i, j] = 0.0
                 yerr[i, j] = 0.0
                 flag[i, j] = False
-    return y, yerr, z, flag, F['obj_id'], F['field'], hbflux, hbeflux
+    return y, yerr, z, flag, F['obj_id'], F['field'], em, emerr
 
 
 def draw_uniform_dist(nsamples, start, end):
@@ -398,6 +430,7 @@ def mock_data(args, mcsed_model, nsamples=5, phot_error=0.05):
 
     Returns
     -------
+    WPB: unit check: f_nu in microJy ?
     y : numpy array (2 dim)
         Photometric magnitudes for mock galaxies
     yerr : numpy array (2 dim)
@@ -450,6 +483,14 @@ def main(argv=None, ssp_info=None):
     # Get Inputs
     args = parse_args(argv)
 
+# WPBWPB delete
+#    print('this is argv:')
+#    print(argv)
+    print(vars(args).keys())
+    print(args)
+#    print(type(argv))
+
+
     # Load Single Stellar Population model(s)
     if ssp_info is None:
         args.log.info('Reading in SSP model')
@@ -466,12 +507,26 @@ def main(argv=None, ssp_info=None):
                         args.dust_law, args.dust_em, nwalkers=args.nwalkers,
                         nsteps=args.nsteps)
 
+#    # WPB delete -- modify to following section and uncomment
+#    print(mcsed_model.dust_abs_class.Av)
+#    print(mcsed_model.dust_abs_class.Rv)
+#    print(mcsed_model.dust_abs_class.evaluate(np.array([5000])))
+#    mcsed_model.dust_abs_class.Rv = args.Rv
+#    print(mcsed_model.dust_abs_class.Rv)
+#    print(mcsed_model.dust_abs_class.evaluate(np.array([5000])))
+
+    # Adjust Rv in the dust absorption model
+    mcsed_model.dust_abs_class.Rv = args.Rv
+
+
+
     # Special case of fixed metallicity
-    if args.fix_metallicity:
+    if args.metallicity:
         mcsed_model.ssp_class.fix_met = True
         mcsed_model.ssp_class.met = args.metallicity
 
-    if args.fix_dust_em:
+
+    if not args.fit_dust_em:
         mcsed_model.dust_em_class.fixed = True
 
     # Make output folder if it doesn't exist
@@ -480,7 +535,8 @@ def main(argv=None, ssp_info=None):
     # Build names for parameters and labels for table
     names = mcsed_model.get_param_names()
     names.append('Log Mass')
-    percentiles = [5, 16, 50, 84, 95]
+    percentiles = args.param_percentiles # WPB delete [5, 16, 50, 84, 95]
+    # WPB field/id
     labels = ['Field', 'ID', 'z']
     for name in names:
         labels = labels + [name + '_%02d' % per for per in percentiles]
@@ -493,8 +549,10 @@ def main(argv=None, ssp_info=None):
         for name in names:
             labels.append(name + '_truth')
             formats[labels[-1]] = '%0.3f'
+    # WPB field/id
     formats['Field'], formats['ID'] = ('%s', '%04d')
 
+    # WPB field/id
     mcsed_model.table = Table(names=labels, dtype=['S7', 'i4'] +
                               ['f8']*(len(labels)-2))
 
@@ -519,6 +577,8 @@ def main(argv=None, ssp_info=None):
             mcsed_model.true_fnu = ty
             mcsed_model.set_new_redshift(zi)
             mcsed_model.remove_lya_filters()
+            if not args.fit_dust_em:
+                mcsed_model.remove_dustem_filters(args.wave_dust_em)
             for hh, let in zip([hl, None], ['a']):#, 'b']):
                 mcsed_model.sfh_class.hblim = hh
                 mcsed_model.sfh_class.hblim_error = args.hblim_floor
@@ -530,49 +590,77 @@ def main(argv=None, ssp_info=None):
             mcsed_model.add_truth_to_table(tr, last)
             print(mcsed_model.table)
     else:
-        y, yerr, z, flag, objid, field, hb_lim, hbe_lim = read_input_file(args)
+    # WPB field/id
+#        y, yerr, z, flag, objid, field, hb_lim, hbe_lim = read_input_file(args)
+        y, yerr, z, flag, objid, field, em, emerr = read_input_file(args)
         iv = mcsed_model.get_params()
-        for yi, ye, zi, fl, oi, fd, hl, hle in zip(y, yerr, z, flag, objid,
-                                                   field, hb_lim, hbe_lim):
+        for yi, ye, zi, fl, oi, fd, emi, emie in zip(y, yerr, z, flag, objid,
+                                                   field, em, emerr):
             mcsed_model.filter_flag = fl
             mcsed_model.set_class_parameters(iv)
             mcsed_model.data_fnu = yi[fl]
             mcsed_model.data_fnu_e = ye[fl]
             mcsed_model.set_new_redshift(zi)
-            mcsed_model.sfh_class.hblim = hl
-            mcsed_model.sfh_class.hblim_error = hle
+            mcsed_model.data_emline = emi
+            mcsed_model.data_emline_e = emie
+#            if hl['Hb_FLUX'] > -99:
+#              mcsed_model.sfh_class.hblim = hl['Hb_FLUX']
+#              mcsed_model.sfh_class.hblim_error = hle['Hb_ERR']
+
             mcsed_model.remove_lya_filters()
+            if not args.fit_dust_em:
+                mcsed_model.remove_dustem_filters(args.wave_dust_em)
+
+# WPB delete
+#            fwave = mcsed_model.get_filter_wavelengths()
+#            print('these are filter wavelengths:')
+#            print(np.sort(fwave))
+#            return
+
             mcsed_model.fit_model()
-            mcsed_model.sample_plot('output/sample_%s_%05d' % (fd, oi))
-            mcsed_model.triangle_plot('output/triangle_%s_%05d_%s_%s' %
-                                      (fd, oi, args.sfh, args.dust_law))
+    # WPB field/id
+            if args.output_dict['sample plot']:
+                mcsed_model.sample_plot('output/sample_%s_%05d' % (fd, oi), 
+                                        imgtype = args.output_dict['image format'])
+            if args.output_dict['triangle plot']:
+                mcsed_model.triangle_plot('output/triangle_%s_%05d_%s_%s' %
+                                          (fd, oi, args.sfh, args.dust_law),
+                                          imgtype = args.output_dict['image format'])
             mcsed_model.table.add_row([fd, oi, zi] + [0.]*(len(labels)-3))
             names = mcsed_model.get_param_names()
             names.append('Log Mass')
             names.append('Ln Prob')
-            T = Table(mcsed_model.samples, names=names)
-            T.write('output/fitposterior_%s_%05d_%s.dat' % (fd, oi, args.sfh),
-                    overwrite=True, format='ascii.fixed_width_two_line')
-            T = Table([mcsed_model.wave, mcsed_model.medianspec],
-                      names=['wavelength', 'spectrum'])
-            T.write('output/bestfitspec_%s_%05d_%s.dat' % (fd, oi, args.sfh),
-                    overwrite=True, format='ascii.fixed_width_two_line')
-            T = Table([mcsed_model.fluxwv, mcsed_model.fluxfn],
-                      names=['wavelength', 'fluxdensity'])
-            T.write('output/bestfitflux_%s_%05d_%s.dat' % (fd, oi, args.sfh),
-                    overwrite=True, format='ascii.fixed_width_two_line')
-            T = Table([mcsed_model.fluxwv, mcsed_model.data_fnu,
-                       mcsed_model.data_fnu_e],
-                      names=['wavelength', 'fluxdensity', 'fluxdensityerror'])
-            T.write('output/observedflux_%s_%05d_%s.dat' % (fd, oi, args.sfh),
-                    overwrite=True, format='ascii.fixed_width_two_line')
+            if args.output_dict['fitposterior']:
+                T = Table(mcsed_model.samples, names=names)
+                T.write('output/fitposterior_%s_%05d_%s.dat' % (fd, oi, args.sfh),
+                        overwrite=True, format='ascii.fixed_width_two_line')
+            if args.output_dict['bestfitspec']:
+                T = Table([mcsed_model.wave, mcsed_model.medianspec],
+                          names=['wavelength', 'spectrum'])
+                T.write('output/bestfitspec_%s_%05d_%s.dat' % (fd, oi, args.sfh),
+                        overwrite=True, format='ascii.fixed_width_two_line')
+            if args.output_dict['bestfitflux']:
+                T = Table([mcsed_model.fluxwv, mcsed_model.fluxfn],
+                          names=['wavelength', 'fluxdensity'])
+                T.write('output/bestfitflux_%s_%05d_%s.dat' % (fd, oi, args.sfh),
+                        overwrite=True, format='ascii.fixed_width_two_line')
+            if args.output_dict['observedflux']:
+                T = Table([mcsed_model.fluxwv, mcsed_model.data_fnu,
+                           mcsed_model.data_fnu_e],
+                           names=['wavelength', 'fluxdensity', 'fluxdensityerror'])
+                T.write('output/observedflux_%s_%05d_%s.dat' % (fd, oi, args.sfh),
+                        overwrite=True, format='ascii.fixed_width_two_line')
             last = mcsed_model.add_fitinfo_to_table(percentiles)
             print(mcsed_model.table)
     if args.parallel:
+# WPB FILL IN -- output_dict['parameters'] keyword
         return [mcsed_model.table, formats]
     else:
-        mcsed_model.table.write('output/%s' % args.output_filename,
-                                format='ascii.fixed_width_two_line',
-                                formats=formats, overwrite=True)
+        if args.output_dict['parameters']:
+            mcsed_model.table.write('output/%s' % args.output_filename,
+                                    format='ascii.fixed_width_two_line',
+                                    formats=formats, overwrite=True)
 if __name__ == '__main__':
     main()
+
+

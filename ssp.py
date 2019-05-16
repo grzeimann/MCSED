@@ -101,6 +101,7 @@ def read_fsps(args, metallicity):
         Remnant mass at a given age (solar masses)
     wave : numpy array (1 dim)
         wavelength for each spectrum spanning 90 Angstroms - 10000 microns
+        in units of Angstroms
     spec : numpy array (2 dim)
         Spectra in f_nu (ergs/s/cm^2/Hz) at 10pc
     '''

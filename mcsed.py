@@ -34,7 +34,8 @@ import matplotlib.pyplot as plt
 class Mcsed:
     def __init__(self, filter_matrix, ssp_spectra, ssp_ages, ssp_masses,
                  ssp_met, wave, sfh_name, dust_abs_name, dust_em_name,
-                 data_fnu=None, data_fnu_e=None, redshift=None,
+                 data_fnu=None, data_fnu_e=None, 
+                 data_emline=None, data_emline_e=None, redshift=None,
                  filter_flag=None, input_spectrum=None, input_params=None,
                  sigma_m=0.1, nwalkers=40, nsteps=1000, true_fnu=None):
         ''' Initialize the Mcsed class.
@@ -63,8 +64,14 @@ class Mcsed:
             This is the input class for dust absorption.
         data_fnu : numpy array (1 dim)
             Photometry for data.  Length = (filter_flag == True).sum()
+WPBWPB units
         data_fnu_e : numpy array (1 dim)
             Photometric errors for data
+        data_emline : Astropy Table (1 dim)
+            Emission line fluxes in units ergs / cm2 / s
+            Possible lines: [O II]3727, HBeta, [O III]5007, HAlpha
+        data_emline_e : Astropy Table (1 dim)
+            Emission line errors in units ergs / cm2 / s
         redshift : float
             Redshift of the source
         filter_flag : numpy array (1 dim)
@@ -100,6 +107,8 @@ class Mcsed:
                               'dust_em_class']
         self.data_fnu = data_fnu
         self.data_fnu_e = data_fnu_e
+        self.data_emline = data_emline
+        self.data_emline_e = data_emline_e
         self.redshift = redshift
         self.filter_flag = filter_flag
         self.input_spectrum = input_spectrum
@@ -156,21 +165,33 @@ class Mcsed:
             self.log.addHandler(handler)
 
     def remove_lya_filters(self):
-        ''' FILL IN
+        '''Remove filters blueward of and containing rest-frame Lyman alpha
         '''
         loc = np.searchsorted(self.wave, 1216. * (1. + self.redshift))
-        loc2 = np.searchsorted(self.wave, 60000.)
         maxima = np.max(self.filter_matrix, axis=0)
         newflag = np.max(self.filter_matrix[:loc, :], axis=0) < maxima * 0.1
-        newflag2 = np.max(self.filter_matrix[loc2:, :], axis=0) < maxima * 0.1
         maximas = np.max(self.filter_matrix[:, self.filter_flag], axis=0)
         newflags = np.max(self.filter_matrix[:loc, self.filter_flag], axis=0) < maximas * 0.1
-        newflags2 = np.max(self.filter_matrix[loc2:, self.filter_flag], axis=0) < maximas * 0.1
-        self.filter_flag = self.filter_flag * newflag * newflag2
+        self.filter_flag = self.filter_flag * newflag 
         if self.true_fnu is not None:
-            self.true_fnu = self.true_fnu[newflags * newflags2]
-        self.data_fnu = self.data_fnu[newflags*newflags2]
-        self.data_fnu_e = self.data_fnu_e[newflags*newflags2]
+            self.true_fnu = self.true_fnu[newflags]
+        self.data_fnu = self.data_fnu[newflags]
+        self.data_fnu_e = self.data_fnu_e[newflags]
+
+    def remove_dustem_filters(self, wave0=2.5):
+        '''Remove filters redward of rest-frame wave0 microns
+        where the SED becomes dominated by dust emission
+        '''
+        loc = np.searchsorted(self.wave, wave0*1e4 * (1. + self.redshift))
+        maxima = np.max(self.filter_matrix, axis=0)
+        newflag = np.max(self.filter_matrix[loc:, :], axis=0) < maxima * 0.1
+        maximas = np.max(self.filter_matrix[:, self.filter_flag], axis=0)
+        newflags = np.max(self.filter_matrix[loc:, self.filter_flag], axis=0) < maximas * 0.1
+        self.filter_flag = self.filter_flag * newflag 
+        if self.true_fnu is not None:
+            self.true_fnu = self.true_fnu[newflags]
+        self.data_fnu = self.data_fnu[newflags]
+        self.data_fnu_e = self.data_fnu_e[newflags]
 
     def get_filter_wavelengths(self):
         ''' FILL IN
@@ -181,7 +202,7 @@ class Mcsed:
     def get_filter_fluxdensities(self):
         '''Convert a spectrum to photometric fluxes for a given filter set.
         The photometric fluxes will be in the same units as the spectrum.
-        Ideally, the spectrum should be in microjanskies(lambda) such that
+        The spectrum should be in microjanskies(lambda) such that
         the photometric fluxes will be in microjanskies.
 
         Returns
@@ -263,6 +284,9 @@ class Mcsed:
             sfr = self.sfh_class.evaluate(self.ssp_ages)
         ageval = 10**self.sfh_class.age
 
+# WPBWPB delete
+#        print('this is the ageval: %s' % ageval)
+
         # ageval sets limit on ssp_ages that are useable in model calculation
         sel = self.ssp_ages <= ageval
 
@@ -293,6 +317,8 @@ class Mcsed:
         Alam = self.dust_abs_class.evaluate(self.wave)
         spec_dustobscured = spec_dustfree * 10**(-0.4 * Alam)
 
+# WPB: exclude dust emission component altogether? Does it make a difference?
+
         # Change in bolometric Luminosity
         L_bol = (np.dot(self.dnu, spec_dustfree) -
                  np.dot(self.dnu, spec_dustobscured))
@@ -321,7 +347,23 @@ class Mcsed:
         else:
             return 0.0
 
+    def measure_ha(self):
+        """
+        measure the strength of the HAlpha 6563 line
+        """
+        ze = (1 + self.redshift) * 6563.
+        xl = np.searchsorted(self.wave, ze)
+        dnu = np.diff(3e18 / self.wave[xl-4:xl+5])
+# MAY NEED TO ADJUST 
+        dnuA = 3e18 / ze - 3e18 / ((1 + self.redshift) * 6567.)
+        y = self.spectrum[xl-4:xl+4]
+        b = self.spectrum[xl-7]
+        return np.dot((y-b), np.abs(dnu)) / 1e29 + (b * dnuA / 1e29)
+
     def measure_hb(self):
+        """
+        measure the strength of the HBeta 4861 line
+        """
         ze = (1 + self.redshift) * 4861.
         xl = np.searchsorted(self.wave, ze)
         dnu = np.diff(3e18 / self.wave[xl-4:xl+5])
@@ -329,6 +371,40 @@ class Mcsed:
         y = self.spectrum[xl-4:xl+4]
         b = self.spectrum[xl-7]
         return np.dot((y-b), np.abs(dnu)) / 1e29 + (b * dnuA / 1e29)
+
+    def measure_oii(self):
+        """
+        measure the strength of the [O II] 3727 line
+        """
+        ze = (1 + self.redshift) * 3727.
+        xl = np.searchsorted(self.wave, ze)
+        dnu = np.diff(3e18 / self.wave[xl-4:xl+5])
+        dnuA = 3e18 / ze - 3e18 / ((1 + self.redshift) * 3731.)
+        y = self.spectrum[xl-4:xl+4]
+        b = self.spectrum[xl-7]
+        return np.dot((y-b), np.abs(dnu)) / 1e29 + (b * dnuA / 1e29)
+
+    def measure_oiii(self):
+        """
+        measure the strength of the [O III] 5007 line
+        note: does not include contribution from [O III] 4959
+        """
+        ze = (1 + self.redshift) * 5007.
+        xl = np.searchsorted(self.wave, ze)
+        dnu = np.diff(3e18 / self.wave[xl-4:xl+5])
+        dnuA = 3e18 / ze - 3e18 / ((1 + self.redshift) * 5011.)
+        y = self.spectrum[xl-4:xl+4]
+        b = self.spectrum[xl-7]
+        return np.dot((y-b), np.abs(dnu)) / 1e29 + (b * dnuA / 1e29)
+
+    def measure_emline_flux(self, line):
+        ''' WPBWPB FILL IN
+        line : str
+            element of {'OII', 'Hb', 'OIII', 'Ha'}
+        '''
+        meas_dict = {'OII':self.measure_hb(), 'Hb':self.measure_oii(),
+                     'OIII':self.measure_oiii(), 'Ha':self.measure_ha()}
+        return meas_dict[line]
 
     def lnlike(self):
         ''' Calculate the log likelihood and return the value and stellar mass
@@ -341,16 +417,21 @@ class Mcsed:
             The mass comes from building of the composite stellar population
         '''
         self.spectrum, mass = self.build_csp()
-        init_term = 0.0
-        self.hbflux = self.measure_hb()
-        if self.sfh_class.hblim is not None:
-            init_term = (-0.5 * (self.hbflux - self.sfh_class.hblim)**2 /
-                         self.sfh_class.hblim_error**2) * 1.
+        # compare input and model emission line fluxes
+        emline_term = 0.0
+        emline_weight = 1.
+        for emline in ['OII', 'Hb', 'OIII', 'Ha']:
+            if self.data_emline['%s_FLUX' % emline] not in [None, -99]:
+                model_lineflux = self.measure_emline_flux(emline)
+                lineflux  = self.data_emline['%s_FLUX' % emline]
+                elineflux = self.data_emline_e['%s_ERR' % emline]
+                emline_term += (-0.5 * (model_lineflux - lineflux)**2. /
+                                elineflux**2.) * emline_weight
         model_y = self.get_filter_fluxdensities()
         inv_sigma2 = 1.0 / (self.data_fnu_e**2 + (model_y * self.sigma_m)**2)
         chi2_term = -0.5 * np.sum((self.data_fnu - model_y)**2 * inv_sigma2)
         parm_term = -0.5 * np.sum(np.log(1 / inv_sigma2))
-        return (chi2_term + parm_term + init_term, mass)
+        return (chi2_term + parm_term + emline_term, mass)
 
     def lnprob(self, theta):
         ''' Calculate the log probabilty and return the value and stellar mass
@@ -539,10 +620,12 @@ class Mcsed:
             fnu = self.get_filter_fluxdensities()
             sp.append(self.spectrum * 1.)
             fn.append(fnu * 1.)
-            hbm.append(self.hbflux * 1.)
+# WPB edit: plotting HBeta line
+# used to have self.hbflux = self.measure_hb() --> changed
+#            hbm.append(self.hbflux * 1.)
         # Plotting median value:
         self.medianspec = np.median(np.array(sp), axis=0)
-        self.hbmedian = np.median(hbm)
+#        self.hbmedian = np.median(hbm)
         ax3.plot(self.wave, self.medianspec, color='dimgray')
         self.fluxwv = wv
         self.fluxfn = np.median(np.array(fn), axis=0)
@@ -570,7 +653,7 @@ class Mcsed:
         ax3.set_ylim([ax3min - 0.4 * ax3ran, ax3max + 0.4 * ax3ran])
         ax3.text(4200, ax3max + 0.2 * ax3ran, r'${\chi}_{\nu}^2 = $%0.2f' % chi2)
 
-    def triangle_plot(self, outname, lnprobcut=7.5):
+    def triangle_plot(self, outname, lnprobcut=7.5, imgtype='png'):
         ''' Make a triangle corner plot for samples from fit
 
         Input
@@ -582,6 +665,8 @@ class Mcsed:
             a cut in log probability space with respect to the maximum
             probability.  For reference, a Gaussian 1-sigma is 2.5 in log prob
             space.
+        imgtype : string
+            The file extension of the output plot
         '''
         # Make selection for three sigma sample
         chi2sel = (self.samples[:, -1] >
@@ -614,22 +699,26 @@ class Mcsed:
         self.add_dust_plot(ax2)
         self.add_spec_plot(ax3)
         self.add_subplots(ax1, ax2, ax3, nsamples)
-        if self.sfh_class.hblim is not None:
-            fig.text(.5, .75, r'H$\beta$ input: %0.2f' %
-                     (self.sfh_class.hblim * 1e17), fontsize=18)
-        fig.text(.5, .70, r'H$\beta$ model: %0.2f' % (self.hbmedian * 1e17),
-                 fontsize=18)
+# WPB edit: plotting HBeta line flux on the figure
+# used to have self.hbflux = self.measure_hb() --> changed
+#        if self.sfh_class.hblim is not None:
+#            fig.text(.5, .75, r'H$\beta$ input: %0.2f' %
+#                     (self.sfh_class.hblim * 1e17), fontsize=18)
+#        fig.text(.5, .70, r'H$\beta$ model: %0.2f' % (self.hbmedian * 1e17),
+#                 fontsize=18)
         # fig.set_size_inches(15.0, 15.0)
-        fig.savefig("%s.png" % (outname), dpi=150)
+        fig.savefig("%s.%s" % (outname, imgtype), dpi=150)
         plt.close(fig)
 
-    def sample_plot(self, outname):
+    def sample_plot(self, outname, imgtype='png'):
         ''' Make a sample plot
 
         Input
         -----
         outname : string
             The sample plot will be saved as "sample_{outname}.png"
+        imgtype : string
+            The file extension of the output plot
 
         '''
         # Make selection for three sigma sample
@@ -646,7 +735,9 @@ class Mcsed:
             a.set_ylabel(names[i])
             if truths is not None:
                 a.plot([0, self.chain.shape[1]], [truths[i], truths[i]], 'r--')
-        fig.savefig("%s.png" % (outname))
+            if i == len(ax)-1:
+                a.set_xlabel("Step")
+        fig.savefig("%s.%s" % (outname, imgtype))
         plt.close(fig)
 
     def add_fitinfo_to_table(self, percentiles, start_value=3, lnprobcut=7.5):
