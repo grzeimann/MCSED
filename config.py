@@ -14,10 +14,11 @@ dust_law = 'calzetti'  # options include: 'noll', 'calzetti'
 dust_em = 'DL07'  # options include: 'DL07'
 
 # Dust attenuation law parameters
-Rv = 4.05 # extinction factor; Rv=4.05 is the default value for Calzetti law
-# factor between E(B-V)_stars and E(B-V)_gas, 
+# if set to a negative value, use the default value for dust law of choice
+Rv = -1 # extinction factor
+# The relative attenuation between stars and gas in the dust model 
 # such that E(B-V)_stars = EBV_stars_gas * E(B-V)_gas
-EBV_stars_gas = 0.44 # default value for calzetti law
+EBV_stars_gas = -1
 
 # Fit dust emission parameters
 # If True, fit the dust emission component. 
@@ -25,10 +26,6 @@ EBV_stars_gas = 0.44 # default value for calzetti law
 # and fix dust emission parameters to umin=2.0, gamma=0.05, qpah=2.5 
 fit_dust_em = False
 wave_dust_em = 2.5 # rest-frame wavelength in microns 
-
-# OIII/Hbeta physical limit
-# WPB: NOTE: currently not used anywhere....
-o3hbratio = 10.
 
 # EMCEE parameters
 nwalkers = 10 # 100
@@ -44,17 +41,30 @@ logU = -2.
 
 # Error floor under which we don't trust the error estimates 
 # minimum photometric error (fractional uncertainty in units of specific flux)
-# WPBWPB - only used in test mode, or always? I think always...
-floor_error = 0.10 
+phot_floor_error = 0.10 
 # minimum emission line error (absolute uncertainty in units of ergs / s / cm2)
 # WPB: NOTE: currently only used in test mode
-hblim_floor = 0.65e-17
+emline_floor_error = 0.65e-17
 
 # Use input photometry and emission lines
 # If True, use data provided in the input file
 # else, ignore input data (in which case input IDs must match Skelton+14 IDs)
-# WPBWPB maybe delete this option and just use whatever appears in the input file...
-input_phot = False
+use_input_data = True #False
+
+# Input emission line strengths
+# keys are emission line name (str), values are rest-frame wavelength (Angstroms)
+# see documentation XXXX for additional information
+# WPB edit (e.g., OIII is not the blended feature, Balmer lines corrected for absorption, 
+#           keys must match input columns of form _FLUX, _ERR...)
+#           will only be used if present in input file,
+#           must have null value = -99
+#           must have both flux and error, i.e., cannot have flux with null error
+#           can also set to {} or None, if preferred
+emline_list_dict = {'OII' : 3727., 'OIII' : 5007.,
+                    'Hb' : 4861., 'Ha' : 6563.}
+emline_factor = 1e-17 # numerical conversion from input values to units ergs/cm2/s
+# WPBWPB delete
+#emline_list_dict = None #{}
 
 # Use metallicity-mass relationship from Ma et al. 2016
 # NOTE: currently unavailable
@@ -67,9 +77,12 @@ metallicity = 0.0077  # float for fixed metallicity, False for free metallicity
 
 # Output files
 # refer to XXXXX for description of each file
+#   parameters: fitted parameters for each object
+#   settings: user-defined options for the run
 # 'image format' is the file type extension of the figures
 #    Supported formats: eps, pdf, pgf, png, ps, raw, rgba, svg, svgz
-output_dict = {'parameters'    : True, 
+output_dict = {'parameters'    : True,
+               'settings'      : True, 
                'fitposterior'  : True,
                'bestfitspec'   : True,
                'bestfitflux'   : True,
@@ -81,8 +94,9 @@ output_dict = {'parameters'    : True,
 # percentiles of each parameter to report in the output file
 param_percentiles = [5, 16, 50, 84, 95]
 
-
-
+# When running in parallel mode, utilize (Total cores) - reserved_cores
+# WPBWPB clarify
+reserved_cores = 2 # integer
 
 
 # Dictionaries
