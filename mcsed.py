@@ -29,13 +29,16 @@ import time
 
 import numpy as np
 import matplotlib.pyplot as plt
+plt.ioff()
 
-
+#WPBWPB re organize the arguments (aesthetic purposes)
 class Mcsed:
-    def __init__(self, filter_matrix, ssp_spectra, ssp_ages, ssp_masses,
-                 ssp_met, wave, sfh_name, dust_abs_name, dust_em_name,
+    def __init__(self, filter_matrix, ssp_spectra, ssp_nebspectra,
+                 emlinewave, ssp_emline, ssp_ages, ssp_masses,
+                 ssp_met, wave, sfh_class, dust_abs_class, dust_em_class,
                  data_fnu=None, data_fnu_e=None, 
-                 data_emline=None, data_emline_e=None, redshift=None,
+                 data_emline=None, data_emline_e=None, emline_dict=None,
+                 redshift=None,
                  filter_flag=None, input_spectrum=None, input_params=None,
                  sigma_m=0.1, nwalkers=40, nsteps=1000, true_fnu=None):
         ''' Initialize the Mcsed class.
@@ -45,33 +48,49 @@ class Mcsed:
         filter_matrix : numpy array (2 dim)
             The filter_matrix has rows of wavelength and columns for each
             filter (can be much larger than the filters used for fitting)
-        ssp_spectra : numpy array (2 dim)
+        ssp_spectra : numpy array (3 dim)
             single stellar population spectrum for each age in ssp_ages
+            and each metallicity in ssp_met 
+        ssp_nebspectra : numpy array (3 dim)
+            nebular emission component corresponding to ssp_spectra
+        emlinewave : numpy array (1 dim)
+            unsmoothed wavelength grid for emission line SSP grid
+            only used for calculating model emission line strengths
+        ssp_emline : numpy array (3 dim)
+            emission line SSP grid spanning emlinewave, age, metallicity
+            only used for calculating model emission line strengths
         ssp_ages : numpy array (1 dim)
             ages of the SSP models
         ssp_masses : numpy array (1 dim)
             remnant masses of the SSP models
+        ssp_met : numpy array (1 dim)
+            metallicities of the SSP models
         wave : numpy array (1 dim)
             wavelength for SSP models and all model spectra
-        sfh_class : class
+        sfh_class : str
+            Converted from str to class in initialization
             This is the input class for sfh.  Each class has a common attribute
             which is "sfh_class.nparams" for organizing the total model_params.
             Also, each class has a key function, sfh_class.evaluate(t), with
             the input of time in units of Gyrs
-        dust_abs_class : class
+        dust_abs_class : str 
+            Converted from str to class in initialization
             This is the input class for dust absorption.
-        dust_em_class : class
+        dust_em_class : str
+            Converted from str to class in initialization
             This is the input class for dust absorption.
         data_fnu : numpy array (1 dim)
             Photometry for data.  Length = (filter_flag == True).sum()
-WPBWPB units
+WPBWPB units + are dimensions correct??
         data_fnu_e : numpy array (1 dim)
             Photometric errors for data
         data_emline : Astropy Table (1 dim)
             Emission line fluxes in units ergs / cm2 / s
-            Possible lines: [O II]3727, HBeta, [O III]5007, HAlpha
         data_emline_e : Astropy Table (1 dim)
             Emission line errors in units ergs / cm2 / s
+        emline_dict : dictionary
+            Keys are emission line names (str)
+            Values are rest-frame wavelength in Angstroms (float)
         redshift : float
             Redshift of the source
         filter_flag : numpy array (1 dim)
@@ -89,26 +108,34 @@ WPBWPB units
             The number of walkers for emcee when fitting a model
         nsteps : int
             The number of steps each walker will make when fitting a model
+        true_fnu : WPBWPB FILL IN
         '''
         # Initialize all argument inputs
         self.filter_matrix = filter_matrix
-        self.ssp_spectra = ssp_spectra
+        self.ssp_spectra = ssp_nebspectra
+        self.ssp_nebspectra = ssp_nebspectra
+        self.emlinewave = emlinewave
+        self.ssp_emline = ssp_emline
         self.ssp_ages = ssp_ages
         self.ssp_masses = ssp_masses
         self.ssp_met = ssp_met
         self.wave = wave
         self.dnu = np.abs(np.hstack([0., np.diff(2.99792e18 / self.wave)]))
-        self.sfh_class = getattr(sfh, sfh_name)()
-        self.dust_abs_class = getattr(dust_abs, dust_abs_name)()
+        self.sfh_class = getattr(sfh, sfh_class)()
+        self.dust_abs_class = getattr(dust_abs, dust_abs_class)()
         self.ssp_class = getattr(ssp, 'fsps_freeparams')()
-        self.dust_em_class = getattr(dust_emission, dust_em_name)()
+        self.dust_em_class = getattr(dust_emission, dust_em_class)()
         self.SSP = None
+        self.nebSSP = None
+        self.lineSSP = None
+# WPBWPB is ssp_class still a thing?
         self.param_classes = ['sfh_class', 'dust_abs_class', 'ssp_class',
                               'dust_em_class']
         self.data_fnu = data_fnu
         self.data_fnu_e = data_fnu_e
         self.data_emline = data_emline
         self.data_emline_e = data_emline_e
+        self.emline_dict = emline_dict
         self.redshift = redshift
         self.filter_flag = filter_flag
         self.input_spectrum = input_spectrum
@@ -256,15 +283,27 @@ WPBWPB units
         '''
         if self.ssp_class.fix_met:
             if self.SSP is not None:
-                return self.SSP
+## WPBWPB delete
+#                print('self.SSP is not None!')
+                return self.SSP, self.nebSSP, self.lineSSP
         Z = np.log10(self.ssp_met)
         z = self.ssp_class.met + np.log10(0.019)
         X = Z - z
         wei = np.exp(-(X)**2 / (2. * 0.15**2))
         wei /= wei.sum()
         self.SSP = np.dot(self.ssp_spectra, wei)
-        return self.SSP
+        self.nebSSP = np.dot(self.ssp_nebspectra, wei)
+        # only treat the emission line grid if it has nonzero elements
+        # (only need to check the youngest few ages)
+        if np.max(self.ssp_emline[:,0:10,:]) > 0:
+            self.lineSSP = np.dot(self.ssp_emline, wei)
+        else:
+            self.lineSSP = self.ssp_emline[:,:,0]
+        return self.SSP, self.nebSSP, self.lineSSP
 
+# separate function for ssp_spectrum nebular, stellar
+# WPBWPB: possibly also output an emission-line strength dictionary from the CSP?
+# --> useful for measuring line strength from the spectrum
     def build_csp(self, sfr=None):
         '''Build a composite stellar population model for a given star
         formation history, dust attenuation law, and dust emission law.
@@ -273,11 +312,12 @@ WPBWPB units
         -------
         csp : numpy array (1 dim)
             Composite stellar population model at self.redshift
+WPBWPB units??
         mass : float
             Mass for csp given the SFH input
         '''
         # Collapse for metallicity
-        SSP = self.get_ssp_spectrum()
+        SSP, nebSSP, lineSSP = self.get_ssp_spectrum()
 
         # Need star formation rate from observation back to formation
         if sfr is None:
@@ -286,6 +326,8 @@ WPBWPB units
 
 # WPBWPB delete
 #        print('this is the ageval: %s' % ageval)
+
+# WPBWPB: I *think* I can just adapt this section to carry the young stars separately
 
         # ageval sets limit on ssp_ages that are useable in model calculation
         sel = self.ssp_ages <= ageval
@@ -301,24 +343,46 @@ WPBWPB units
         if len(select_too_old):
             B = np.nonzero(self.ssp_ages >= ageval)[0][0]
             if A == B:
-                spec_dustfree = np.dot(SSP, weight)
+                spec_dustfree     = np.dot(SSP, weight)
+                nebspec_dustfree  = np.dot(nebSSP, weight)
+                linespec_dustfree = np.dot(lineSSP, weight)
                 mass = np.sum(weight * self.ssp_masses)
             else:
                 lw = ageval - self.ssp_ages[A]
                 wei = lw * 1e9 * np.interp(ageval, self.ssp_ages, sfr)
                 weight[B] = wei
-                spec_dustfree = np.dot(SSP, weight)
+                spec_dustfree     = np.dot(SSP, weight)
+                nebspec_dustfree  = np.dot(nebSSP, weight)
+                linespec_dustfree = np.dot(lineSSP, weight)
                 mass = np.sum(weight * self.ssp_masses)
         else:
-            spec_dustfree = np.dot(SSP, weight)
+            spec_dustfree     = np.dot(SSP, weight)
+            nebspec_dustfree  = np.dot(nebSSP, weight)
+            linespec_dustfree = np.dot(lineSSP, weight)
             mass = np.sum(weight * self.ssp_masses)
 
-        # Need to correct for dust attenuation
+        # Need to correct stellar spectrum for dust attenuation
         Alam = self.dust_abs_class.evaluate(self.wave)
         spec_dustobscured = spec_dustfree * 10**(-0.4 * Alam)
 
-# WPB: exclude dust emission component altogether? Does it make a difference?
+        # Correct the corresponding nebular spectrum separately
+# if attenuating it directly tied to overall dust law,
+# modified by coefficient between EBV_stars ~ gas, get it here
+        Alam_gas = Alam / self.dust_abs_class.EBV_stars_gas
+        nebspec_dustobscured  = nebspec_dustfree * 10**(-0.4 * Alam_gas)
 
+        # recompute attenuation for the finer wavelength grid of emission lines 
+        Alam_gas_emline = (self.dust_abs_class.evaluate(self.emlinewave,new_wave=True)
+                          / self.dust_abs_class.EBV_stars_gas)
+        linespec_dustobscured = linespec_dustfree * 10**(-0.4*Alam_gas_emline)
+# else, use a screen model
+# WPBWPB fix this, attenuate the nebular emission differently
+
+# WPBWPB: do I need to change units of linespec? what are current units and what do I want?
+        # Combine the dust-corrected stellar and nebular emission spectra
+        spec_dustobscured += nebspec_dustobscured
+
+# WPB: exclude dust emission component altogether? Does it make a difference?
         # Change in bolometric Luminosity
         L_bol = (np.dot(self.dnu, spec_dustfree) -
                  np.dot(self.dnu, spec_dustobscured))
@@ -327,10 +391,16 @@ WPBWPB units
         spec_dustobscured += L_bol * self.dust_em_class.evaluate(self.wave)
 
         # Redshift to observed frame
+# WPBWPB: am I sure I want to multiply the spectrum by 1+z? not divide?
         csp = np.interp(self.wave, self.wave * (1. + self.redshift),
                         spec_dustobscured * (1. + self.redshift))
+
+# WPBWPB: need to correct the line_csp somehow... just a distance term I think?
+        # WPBWPB comment:
+        line_csp = linespec_dustobscured.copy()
+
         # Correct spectra from 10pc to redshift of the source
-        return csp / self.Dl**2, mass
+        return csp / self.Dl**2, line_csp / self.Dl**2, mass
 
     def lnprior(self):
         ''' Simple, uniform prior for input variables
@@ -347,64 +417,81 @@ WPBWPB units
         else:
             return 0.0
 
-    def measure_ha(self):
-        """
-        measure the strength of the HAlpha 6563 line
-        """
-        ze = (1 + self.redshift) * 6563.
-        xl = np.searchsorted(self.wave, ze)
-        dnu = np.diff(3e18 / self.wave[xl-4:xl+5])
-# MAY NEED TO ADJUST 
-        dnuA = 3e18 / ze - 3e18 / ((1 + self.redshift) * 6567.)
-        y = self.spectrum[xl-4:xl+4]
-        b = self.spectrum[xl-7]
-        return np.dot((y-b), np.abs(dnu)) / 1e29 + (b * dnuA / 1e29)
+## WPBWPB delete
+#    def measure_ha(self):
+#        """
+#        measure the strength of the HAlpha 6563 line
+#        """
+#        ze = (1 + self.redshift) * 6563.
+#        xl = np.searchsorted(self.wave, ze)
+#        dnu = np.diff(3e18 / self.wave[xl-4:xl+5])
+## MAY NEED TO ADJUST 
+#        dnuA = 3e18 / ze - 3e18 / ((1 + self.redshift) * 6567.)
+#        y = self.spectrum[xl-4:xl+4]
+#        b = self.spectrum[xl-7]
+#        return np.dot((y-b), np.abs(dnu)) / 1e29 + (b * dnuA / 1e29)
+#
+#    def measure_hb(self):
+#        """
+#        measure the strength of the HBeta 4861 line
+#        """
+#        ze = (1 + self.redshift) * 4861.
+#        xl = np.searchsorted(self.wave, ze)
+#        dnu = np.diff(3e18 / self.wave[xl-4:xl+5])
+#        dnuA = 3e18 / ze - 3e18 / ((1 + self.redshift) * 4865.)
+#        y = self.spectrum[xl-4:xl+4]
+#        b = self.spectrum[xl-7]
+#        return np.dot((y-b), np.abs(dnu)) / 1e29 + (b * dnuA / 1e29)
+#
+#    def measure_oii(self):
+#        """
+#        measure the strength of the [O II] 3727 line
+#        """
+#        ze = (1 + self.redshift) * 3727.
+#        xl = np.searchsorted(self.wave, ze)
+#        dnu = np.diff(3e18 / self.wave[xl-4:xl+5])
+#        dnuA = 3e18 / ze - 3e18 / ((1 + self.redshift) * 3731.)
+#        y = self.spectrum[xl-4:xl+4]
+#        b = self.spectrum[xl-7]
+#        return np.dot((y-b), np.abs(dnu)) / 1e29 + (b * dnuA / 1e29)
+#
+#    def measure_oiii(self):
+#        """
+#        measure the strength of the [O III] 5007 line
+#        note: does not include contribution from [O III] 4959
+#        """
+#        ze = (1 + self.redshift) * 5007.
+#        xl = np.searchsorted(self.wave, ze)
+#        dnu = np.diff(3e18 / self.wave[xl-4:xl+5])
+#        dnuA = 3e18 / ze - 3e18 / ((1 + self.redshift) * 5011.)
+#        y = self.spectrum[xl-4:xl+4]
+#        b = self.spectrum[xl-7]
+#        return np.dot((y-b), np.abs(dnu)) / 1e29 + (b * dnuA / 1e29)
 
-    def measure_hb(self):
-        """
-        measure the strength of the HBeta 4861 line
-        """
-        ze = (1 + self.redshift) * 4861.
-        xl = np.searchsorted(self.wave, ze)
-        dnu = np.diff(3e18 / self.wave[xl-4:xl+5])
-        dnuA = 3e18 / ze - 3e18 / ((1 + self.redshift) * 4865.)
-        y = self.spectrum[xl-4:xl+4]
-        b = self.spectrum[xl-7]
-        return np.dot((y-b), np.abs(dnu)) / 1e29 + (b * dnuA / 1e29)
-
-    def measure_oii(self):
-        """
-        measure the strength of the [O II] 3727 line
-        """
-        ze = (1 + self.redshift) * 3727.
-        xl = np.searchsorted(self.wave, ze)
-        dnu = np.diff(3e18 / self.wave[xl-4:xl+5])
-        dnuA = 3e18 / ze - 3e18 / ((1 + self.redshift) * 3731.)
-        y = self.spectrum[xl-4:xl+4]
-        b = self.spectrum[xl-7]
-        return np.dot((y-b), np.abs(dnu)) / 1e29 + (b * dnuA / 1e29)
-
-    def measure_oiii(self):
-        """
-        measure the strength of the [O III] 5007 line
-        note: does not include contribution from [O III] 4959
-        """
-        ze = (1 + self.redshift) * 5007.
-        xl = np.searchsorted(self.wave, ze)
-        dnu = np.diff(3e18 / self.wave[xl-4:xl+5])
-        dnuA = 3e18 / ze - 3e18 / ((1 + self.redshift) * 5011.)
-        y = self.spectrum[xl-4:xl+4]
-        b = self.spectrum[xl-7]
-        return np.dot((y-b), np.abs(dnu)) / 1e29 + (b * dnuA / 1e29)
-
-    def measure_emline_flux(self, line):
+    def measure_emline_flux(self, wave0, clight=2.99792e18):
         ''' WPBWPB FILL IN
-        line : str
-            element of {'OII', 'Hb', 'OIII', 'Ha'}
+        wave0 : float
+            rest-frame wavelength of emission line (in Angstroms)
+        Returns
+        -------
+        flux : float
+            emission line flux in units of ergs / s / cm2
         '''
-        meas_dict = {'OII':self.measure_hb(), 'Hb':self.measure_oii(),
-                     'OIII':self.measure_oiii(), 'Ha':self.measure_ha()}
-        return meas_dict[line]
+        # return zero if no nebular emission is present
+        if np.max( self.lineCSP ) <= 0:
+            return 0.
+        w = wave0 # * (1 + self.redshift)
+        indx = np.searchsorted(self.emlinewave, w)
+        if self.lineCSP[indx] == 0:
+            return 0.
+        # find indices when target line goes to zero
+        indx_zero = np.where(self.lineCSP==0)[0]
+        indx_lo = indx - np.min( indx - indx_zero[indx_zero<indx])
+        indx_hi = indx + np.min( indx_zero[indx_zero>indx] - indx)
+        dnu = np.diff( clight / self.emlinewave[indx_lo:indx_hi+2] )
+        y = self.lineCSP[indx_lo:indx_hi+1]
+        # translate from flux density in micro-Jy to total flux
+        return np.dot( y, np.abs(dnu) ) / 1e29
 
     def lnlike(self):
         ''' Calculate the log likelihood and return the value and stellar mass
@@ -416,17 +503,33 @@ WPBWPB units
             The log likelihood includes a chi2_term and a parameters term.
             The mass comes from building of the composite stellar population
         '''
-        self.spectrum, mass = self.build_csp()
+        self.spectrum, self.lineCSP, mass = self.build_csp()
+
         # compare input and model emission line fluxes
         emline_term = 0.0
         emline_weight = 1.
-        for emline in ['OII', 'Hb', 'OIII', 'Ha']:
-            if self.data_emline['%s_FLUX' % emline] not in [None, -99]:
-                model_lineflux = self.measure_emline_flux(emline)
-                lineflux  = self.data_emline['%s_FLUX' % emline]
-                elineflux = self.data_emline_e['%s_ERR' % emline]
-                emline_term += (-0.5 * (model_lineflux - lineflux)**2. /
-                                elineflux**2.) * emline_weight
+        if self.emline_dict not in [None, {}]:
+            # if all lines have null line strengths, ignore 
+            if not min(self.data_emline) == max(self.data_emline) == -99:
+## WPBWPB delete
+#                print('this is emline_dict:' + str(self.emline_dict))
+#                print('this is emline data, error:')
+#                print(self.data_emline)
+#                print(self.data_emline_e)
+                for emline in self.emline_dict.keys():
+                    if self.data_emline['%s_FLUX' % emline] > -99: # null value
+# WPB: change s.t. argument is a rest-frame wavelength 
+                        emline_wave = self.emline_dict[emline]
+                        model_lineflux = self.measure_emline_flux(wave0=emline_wave)
+                        lineflux  = self.data_emline['%s_FLUX' % emline]
+                        elineflux = self.data_emline_e['%s_ERR' % emline]
+                        emline_term += (-0.5 * (model_lineflux - lineflux)**2 /
+                                        elineflux**2.) * emline_weight
+## WPBWPB: delete
+#                print('this is emline and term:')
+#                print(emline)
+#                print(emline_term)
+
         model_y = self.get_filter_fluxdensities()
         inv_sigma2 = 1.0 / (self.data_fnu_e**2 + (model_y * self.sigma_m)**2)
         chi2_term = -0.5 * np.sum((self.data_fnu - model_y)**2 * inv_sigma2)
@@ -570,7 +673,7 @@ WPBWPB units
 
     def spectrum_plot(self, ax, color=[0.996, 0.702, 0.031], alpha=0.1):
         ''' Make spectum plot for current model '''
-        self.spectrum, mass = self.build_csp()
+        self.spectrum, self.lineCSP, mass = self.build_csp()
         ax.plot(self.wave, self.spectrum, color=color, alpha=alpha)
 
     def add_sfr_plot(self, ax1):
@@ -610,6 +713,7 @@ WPBWPB units
         ''' Add Subplots to Triangle plot below '''
         wv = self.get_filter_wavelengths()
         rndsamples = 200
+# WPBWPB edit: might not need hbm list anymore
         sp, fn, hbm = ([], [], [])
         for i in np.arange(rndsamples):
             ind = np.random.randint(0, nsamples.shape[0])
@@ -699,7 +803,7 @@ WPBWPB units
         self.add_dust_plot(ax2)
         self.add_spec_plot(ax3)
         self.add_subplots(ax1, ax2, ax3, nsamples)
-# WPB edit: plotting HBeta line flux on the figure
+# WPB edit: printing HBeta line flux on the figure
 # used to have self.hbflux = self.measure_hb() --> changed
 #        if self.sfh_class.hblim is not None:
 #            fig.text(.5, .75, r'H$\beta$ input: %0.2f' %
@@ -741,6 +845,8 @@ WPBWPB units
         plt.close(fig)
 
     def add_fitinfo_to_table(self, percentiles, start_value=3, lnprobcut=7.5):
+        ''' Assumes that "Ln Prob" is the last column in self.samples
+        '''
         chi2sel = (self.samples[:, -1] >
                    (np.max(self.samples[:, -1], axis=0) - lnprobcut))
         nsamples = self.samples[chi2sel, :-1]

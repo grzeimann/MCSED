@@ -5,6 +5,7 @@
 """
 
 from __future__ import absolute_import
+import sys
 import argparse as ap
 import numpy as np
 import os.path as op
@@ -16,7 +17,6 @@ from astropy.table import Table
 from mcsed import Mcsed
 from distutils.dir_util import mkpath
 from cosmology import Cosmology
-
 
 def setup_logging():
     '''Setup Logging for MCSED, which allows us to track status of calls and
@@ -71,6 +71,23 @@ def parse_args(argv=None):
         as well as astributes from the config file
     '''
 
+    # Avoid an infinite loop between parallel and series functions
+    # only set to True if parallel mode already initiated 
+    # from within run_mcsed_parallel.py script
+    already_parallel = False
+    if type(argv) is list:
+        if '--already_parallel' in argv:
+            argv.remove('--already_parallel')
+            already_parallel = True
+
+    # Pass "count" keyword -- only used in test mode in parallel
+    count = 0
+    if type(argv) is list:
+        if '--count' in argv:
+            indx = argv.index('--count')
+            count = int( argv[indx+1] )
+            del argv[indx: indx+2]
+
     parser = ap.ArgumentParser(description="MCSED",
                                formatter_class=ap.RawTextHelpFormatter)
 
@@ -120,7 +137,7 @@ def parse_args(argv=None):
 
     parser.add_argument("-an", "--add_nebular",
                         help='''Add Nebular Emission''',
-                        type=bool, default=None)
+                        action="count", default=0)
 
     parser.add_argument("-lu", "--logU",
                         help='''Ionization Parameter for nebular gas''',
@@ -128,14 +145,14 @@ def parse_args(argv=None):
 
     parser.add_argument("-fd", "--fit_dust_em",
                         help='''Fit Dust Emission''',
-                        type=str, default=None)
+                        action="count", default=0)
 
-    parser.add_argument("-fe", "--floor_error",
+    parser.add_argument("-pf", "--phot_floor_error",
                         help='''Error floor for photometry''',
                         type=float, default=None)
 
-    parser.add_argument("-hf", "--hblim_floor",
-                        help='''HB Error floor''',
+    parser.add_argument("-ef", "--emline_floor_error",
+                        help='''Error floor for emission lines''',
                         type=float, default=None)
 
     parser.add_argument("-no", "--nobjects",
@@ -144,39 +161,54 @@ def parse_args(argv=None):
 
     parser.add_argument("-p", "--parallel",
                         help='''Running in parallel?''',
-                        type=bool, default=False)
+                        action="count", default=0)
 
-    parser.add_argument("-c", "--count",
-                        help='''Starting count for fake sources''',
-                        type=int, default=0)
-
+    # Initialize arguments and log
     args = parser.parse_args(args=argv)
+    args.log = setup_logging()
+
+# WPBWPB delete
+# add nebular becomes true no matter what argument is passed...
+#    print(args.add_nebular)
+#    print('args.test, getattr:  %s,  %s' % (args.test, getattr(args, 'test')))
 
     # Use config values if none are set in the input
+    # Use command line arguments, if given. Else, refer to config file
+#WPBWPB delete:
+# i can combine this and reading from config into one list. list all desired variables
+# and if cannot be passed on command line, it will already defer to config file
+# unused from parser args... filename, output_filename, test, test_field, parallel, count
     arg_inputs = ['ssp', 'metallicity', 'isochrone', 'sfh', 'dust_law',
-                  'nwalkers', 'nsteps',
-                  'add_nebular', 'logU', 'floor_error', 
-                  'fit_dust_em', 'nobjects']
+                  'nwalkers', 'nsteps', 'add_nebular', 'logU', 'fit_dust_em',
+                  'phot_floor_error', 'emline_floor_error', 'nobjects',
+                  'dust_em', 'Rv', 'EBV_stars_gas', 'wave_dust_em',
+                  'emline_list_dict', 'emline_factor', 'use_input_data',
+                  'metallicity_mass_relationship', 'metallicity_dict',
+                  'filt_dict', 'catalog_filter_dict', 'filter_matrix_name',
+                  'catalog_maglim_dict',
+                  'output_dict', 'param_percentiles', 'reserved_cores']
     for arg_i in arg_inputs:
-        if getattr(args, arg_i) is None:
+        try:
+            if getattr(args, arg_i) in [None, 0]:
+                setattr(args, arg_i, getattr(config, arg_i))
+        except AttributeError:
             setattr(args, arg_i, getattr(config, arg_i))
 
-    # Copy list of config values to the args class
-    config_copy_list = ['metallicity_dict', 'filt_dict', 'catalog_filter_dict',
-                        'filter_matrix_name', 'dust_em',
-                        'metallicity_mass_relationship', 'catalog_maglim_dict',
-                        'o3hbratio', 'hblim_floor',
-                        'fit_dust_em', 'wave_dust_em',
-                        'Rv', 'EBV_stars_gas',
-                        'output_dict', 'param_percentiles']
+    # If a test field is specified on the command line, initialize test mode
+    if '-tf' in argv:
+        args.test = True
 
-    for con_copy in config_copy_list:
-        setattr(args, con_copy, getattr(config, con_copy))
+#WPBWPB delete
+#    print('test, fitdustem, nebular, parallel: %s, %s, %s, %s' % (args.test, args.fit_dust_em, args.add_nebular, args.parallel) )
 
-    args.log = setup_logging()
-    args.fit_dust_em = str2bool(str(args.fit_dust_em), args.log)
+
+#    args.fit_dust_em = str2bool(str(args.fit_dust_em), args.log)
+#WPBWPB delete
+#    print(args.fit_dust_em)
+#    print(args.add_nebular)
 
     # Set metallicity as free or fixed parameter
+# WPBWPB: should 0,1 be boolean arguments on command line? boolean command line args only require flag, not flag+value -- metallicity is only ambiguous case...
     try:
         if args.metallicity not in ['0','1']:
             args.metallicity = float(args.metallicity)
@@ -185,6 +217,15 @@ def parse_args(argv=None):
         if args.metallicity:
             print("Fixing metallicity at z = 0.0077")
             args.metallicity = 0.0077
+
+    # Avoid an infinite loop between parallel and series functions
+    if already_parallel:
+        args.already_parallel = True
+    else:
+        args.already_parallel = False
+
+    # pass "count" keyword -- only used in test mode in parallel
+    args.count = count
 
     return args
 
@@ -301,7 +342,7 @@ def read_input_file(args):
         Flag set to True for filters in the catalog_filter_dict in config.py
     em : Astropy Table (2 dim)
         Emission line fluxes in ergs / cm2 / s
-        Possible lines: [O II]3727, HBeta, [O III]5007, HAlpha
+        Desired lines are read from dictionary in config.py
     emerr : Astropy Table (2 dim)
         Emission line errors in ergs / cm2 / s 
     '''
@@ -320,25 +361,47 @@ def read_input_file(args):
     yerr = np.zeros((nobj, nfilters))
     flag = np.zeros((nobj, nfilters), dtype=bool)
 
+    # keep track of which columns from the input file are utilized
+    Fcols = list(F.colnames)
+## WPBWPB delete
+#    print('this is Fcols:   '+str(Fcols))
+
     # redshift array
     z = F['z']
+    Fcols.remove('z')
 
     # convert from mag_zp = 25 to microjanskies (mag_zp = 23.9)
     fac = 10**(-0.4*(25.0-23.9))
 
     # read in emission line fluxes, if provided
-    fill_value = -99 # should always be set to -99
-    emline_factor = 1e-17
-    em, emerr = Table(), Table()
-    for emline in ['OII', 'Hb', 'OIII', 'Ha']:
-        colname, ecolname = '%s_FLUX' % emline, '%s_ERR' % emline
-        try:
-            em[colname]     = F[colname]  * emline_factor
-            emerr[ecolname] = F[ecolname] * emline_factor
-            print('Reading %s line fluxes from input file' % emline)
-        except KeyError:
-            em[colname]     = np.full(len(F), fill_value)
-            emerr[ecolname] = np.full(len(F), fill_value)
+    emline_fill_value = -99 # null value, should not be changed
+    if (args.emline_list_dict not in [None, {}]) & (args.use_input_data):
+        em, emerr = Table(), Table()
+        for emline in args.emline_list_dict.keys():
+            colname, ecolname = '%s_FLUX' % emline, '%s_ERR' % emline
+            if colname in Fcols:
+                em_arr = np.array(F[colname]  * args.emline_factor)
+                emerr_arr = np.array(F[ecolname] * args.emline_factor)
+# WPBWPB -- need to convert from ecs to something else?
+# WPBWPB: need to adjust for the emline error floor? 
+            # account for case where individual objects have null measurements
+                null_idx = np.where(np.array(F[colname])==emline_fill_value)[0]
+                em_arr[null_idx] = emline_fill_value
+                emerr_arr[null_idx] = emline_fill_value
+
+                em[colname]     = em_arr 
+                emerr[ecolname] = emerr_arr 
+
+                Fcols = [c for c in Fcols if c not in [colname, ecolname]]
+                print('Reading %s line fluxes from input file' % emline)
+## WPBWPB delete
+#                print('this is Fcols:   '+str(Fcols))
+            else: 
+                em[colname]     = np.full(len(F), emline_fill_value)
+                emerr[ecolname] = np.full(len(F), emline_fill_value)
+    else:
+        em    = np.full((len(F),2), emline_fill_value)
+        emerr = np.full((len(F),2), emline_fill_value)
 
     for i, datum in enumerate(F):
         loc = datum[0].lower()
@@ -358,7 +421,7 @@ def read_input_file(args):
                     y[i, j] = fi*fac
                     # use a floor error if necessary
                     if fi != 0:
-                        yerr[i, j] = np.abs(np.max([args.floor_error,
+                        yerr[i, j] = np.abs(np.max([args.phot_floor_error,
                                             np.abs(fie/fi)]) * fi * fac)
                     else:
                         yerr[i, j] = 0.0
@@ -372,6 +435,13 @@ def read_input_file(args):
                 y[i, j] = 0.0
                 yerr[i, j] = 0.0
                 flag[i, j] = False
+
+    # warn of any unused columns from the input file
+    if (Fcols!=[]) & (args.use_input_data):
+        print('*CAUTION* unread columns in the input file:')
+        print(Fcols) 
+
+    # WPBWPB: adjust, clarify the column names
     return y, yerr, z, flag, F['obj_id'], F['field'], em, emerr
 
 
@@ -431,6 +501,7 @@ def mock_data(args, mcsed_model, nsamples=5, phot_error=0.05):
     Returns
     -------
     WPB: unit check: f_nu in microJy ?
+WPBWPB: modify, document all outputs
     y : numpy array (2 dim)
         Photometric magnitudes for mock galaxies
     yerr : numpy array (2 dim)
@@ -441,16 +512,37 @@ def mock_data(args, mcsed_model, nsamples=5, phot_error=0.05):
         Mock input parameters for each fake galaxy, e.g. dust, sfh, mass
     '''
     # Build fake theta, set z, mass, age to get sfh_a
+# WPB: modify, different accounting of emission lines (other lines?)
+# WPB: modify, redshift range
     np.random.seed()
     thetas = mcsed_model.get_init_walker_values(num=nsamples, kind='ball')
     zobs = draw_uniform_dist(nsamples, 1.9, 2.35)
-    params, y, yerr, true_y, hlims = [], [], [], [], []
+    params, y, yerr, true_y = [], [], [], []
+    # add emission line fluxes
+# WPBWPB: want true and simulated line fluxes? how get errors?
+    emline_fill_value = -99 # null value, should not be changed
+    if (args.emline_list_dict not in [None, {}]):
+        em, emerr = Table(), Table()
+    else:
+        em    = np.full( (nsamples,2), emline_fill_value)
+        emerr = np.full( (nsamples,2), emline_fill_value)
     for theta, z in zip(thetas, zobs):
         mcsed_model.set_class_parameters(theta)
         mcsed_model.set_new_redshift(z)
-        mcsed_model.spectrum, mass = mcsed_model.build_csp()
-        hlims.append(mcsed_model.measure_hb())
-        args.log.info('%0.2f, %0.2f' % (hlims[-1]*1e17, np.log10(mass)))
+        mcsed_model.spectrum, mcsed_model.lineCSP, mass = mcsed_model.build_csp()
+        # emission line fluxes
+        if (args.emline_list_dict not in [None, {}]): 
+            em_loc, emerr_loc = Table(), Table()
+            for emline in args.emline_list_dict.keys():
+                colname, ecolname = '%s_FLUX' % emline, '%s_ERR' % emline
+                emline_wave = args.emline_list_dict[emline]
+                em_loc[colname] = mcsed_model.measure_emline_flux(wave0=emline_wave)
+                emerr_loc[ecolname] = args.emline_floor_error
+            em = vstack([em, em_loc])
+            emerr = vstack([emerr, emerr_loc])
+# WPBWPB: simulate line fluxes within measurement errors?
+## WPBWPB adjust log info.....
+#        args.log.info('%0.2f, %0.2f' % (hlims[-1]*1e17, np.log10(mass)))
         f_nu = mcsed_model.get_filter_fluxdensities()
         if args.test_field in args.catalog_maglim_dict.keys():
             f_nu_e = get_maglim_filters(args)[mcsed_model.filter_flag]
@@ -462,7 +554,7 @@ def mock_data(args, mcsed_model, nsamples=5, phot_error=0.05):
         true_y.append(f_nu)
         params.append(list(theta) + [np.log10(mass)])
 
-    return y, yerr, zobs, params, true_y, hlims
+    return y, yerr, zobs, params, true_y, em, emerr
 
 
 def main(argv=None, ssp_info=None):
@@ -480,33 +572,85 @@ def main(argv=None, ssp_info=None):
     The id is the skelton photometric id for the given field
     The redshift is fixed in the fitting
     '''
+
+    # Check if parallel mode is requested, and run if so
+
+
     # Get Inputs
+    if argv == None:
+        argv = sys.argv
+        argv.remove('run_mcsed_fit.py')
+
     args = parse_args(argv)
 
-# WPBWPB delete
-#    print('this is argv:')
+## WPBWPB delete
+#    print('this is argv from *fit.py.main():')
 #    print(argv)
-    print(vars(args).keys())
-    print(args)
+#    print(vars(args).keys())
+#    print(args)
+#    print(type(argv))
+#    return
+
+
+    # Run in parallel, if appropriate
+    # (and if not already called from run_mcsed_parallel.py)
+    if (args.parallel) & (not args.already_parallel):
+## WPBWPB delete
+#        print('just now starting parallel mode from within series function')
+#        print('this is argv from *fit.py.main():')
+#        print(argv)
+        import run_mcsed_parallel
+        run_mcsed_parallel.main_parallel(argv=argv)
+        return   
+
+##WPBWPB delete
+#    print('running in series. here are args:')
+#    print('this is argv from *fit.py.main():')
+#    print(argv)
+#    print(vars(args).keys())
+#    print(args)
 #    print(type(argv))
 
-
+## WPBWPB delete
+#    print('testing if boolean command line args default to True/False. this is add_nebular and fit_dust_emission:')
+#    print((args.add_nebular, args.fit_dust_em))
+ 
     # Load Single Stellar Population model(s)
     if ssp_info is None:
+## WPB delete: if carrying nebular separately from rest of spectrum...
+#        ages, masses, wave, SSP, met, nebspec = read_ssp(args)
+#        # WPBWPB delete
+#        np.savez('spectra_separate',wave=wave,age=ages,spec=SSP,nspec=nebspec)
+#        return
+#
+## WPBWPB delete: save emission line SSP grid
+#        ages, masses, wave, SSP, met, nebSSP, linewave, lineSSP = read_ssp(args)
+#        np.savez('emlineSSP', wave=linewave, age=ages, met=met, spec=lineSSP)
+#        return
+## WPB delete: if carrying them together, as originally done
+## in that case, use the original (unmodified) ssp.py file
+#        ages, masses, wave, SSP, met = read_ssp(args)
+#        np.savez('spectra_together',wave=wave,age=ages,spec=SSP)
+#        return
+
         args.log.info('Reading in SSP model')
-        ages, masses, wave, SSP, met = read_ssp(args)
+        ages, masses, wave, SSP, met, nebSSP, linewave, lineSSP = read_ssp(args)
+## WPBWPB delete
+#        print((wave.shape, linewave.shape))
     else:
-        ages, masses, wave, SSP, met = ssp_info
+        ages, masses, wave, SSP, met, nebSSP, linewave, lineSSP = ssp_info
 
     # Build Filter Matrix
     filter_matrix = build_filter_matrix(args, wave)
 
     # Make one instance of Mcsed for speed on initialization
     # Then replace the key variables each iteration for a given galaxy
-    mcsed_model = Mcsed(filter_matrix, SSP, ages, masses, met, wave, args.sfh,
+    mcsed_model = Mcsed(filter_matrix, SSP, nebSSP, linewave, lineSSP, ages, 
+                        masses, met, wave, args.sfh,
                         args.dust_law, args.dust_em, nwalkers=args.nwalkers,
                         nsteps=args.nsteps)
-
+## WPBWPB delete
+#    return
 #    # WPB delete -- modify to following section and uncomment
 #    print(mcsed_model.dust_abs_class.Av)
 #    print(mcsed_model.dust_abs_class.Rv)
@@ -515,19 +659,32 @@ def main(argv=None, ssp_info=None):
 #    print(mcsed_model.dust_abs_class.Rv)
 #    print(mcsed_model.dust_abs_class.evaluate(np.array([5000])))
 
-    # Adjust Rv in the dust absorption model
-    mcsed_model.dust_abs_class.Rv = args.Rv
+    # Adjust Rv in the dust absorption model, if specified in config file
+    # Otherwise, use the default value for the dust law being used
+    if args.Rv >= 0:
+        mcsed_model.dust_abs_class.Rv = args.Rv
+    else:
+        args.Rv = mcsed_model.dust_abs_class.Rv
 
+    # Adjust the relative attenuation between stars and gas in the dust model
+    # E(B-V)_stars = EBV_stars_gas * E(B-V)_gas
+    if args.EBV_stars_gas >= 0:
+        mcsed_model.dust_abs_class.EBV_stars_gas = args.EBV_stars_gas
+    else:
+        args.EBV_stars_gas = mcsed_model.dust_abs_class.EBV_stars_gas
 
+#WPBWPB delete: this is where I adjust additional class params from config.py options
 
     # Special case of fixed metallicity
     if args.metallicity:
         mcsed_model.ssp_class.fix_met = True
         mcsed_model.ssp_class.met = args.metallicity
 
-
     if not args.fit_dust_em:
         mcsed_model.dust_em_class.fixed = True
+
+    # set list of possible emission lines
+    mcsed_model.emline_dict = args.emline_list_dict
 
     # Make output folder if it doesn't exist
     mkpath('output')
@@ -535,7 +692,7 @@ def main(argv=None, ssp_info=None):
     # Build names for parameters and labels for table
     names = mcsed_model.get_param_names()
     names.append('Log Mass')
-    percentiles = args.param_percentiles # WPB delete [5, 16, 50, 84, 95]
+    percentiles = args.param_percentiles 
     # WPB field/id
     labels = ['Field', 'ID', 'z']
     for name in names:
@@ -550,7 +707,10 @@ def main(argv=None, ssp_info=None):
             labels.append(name + '_truth')
             formats[labels[-1]] = '%0.3f'
     # WPB field/id
-    formats['Field'], formats['ID'] = ('%s', '%04d')
+    formats['Field'], formats['ID'] = ('%s', '%05d')
+
+##WPBWPB delete
+#    print(formats)
 
     # WPB field/id
     mcsed_model.table = Table(names=labels, dtype=['S7', 'i4'] +
@@ -558,17 +718,19 @@ def main(argv=None, ssp_info=None):
 
     # MAIN FUNCTIONALITY
     if args.test:
+## WPBWPB delete
+#        print('I"m in test mode!')
         fl = get_test_filters(args)
         mcsed_model.filter_flag = fl * True
         default = mcsed_model.get_params()
-        y, yerr, z, truth, true_y, hlims = mock_data(args, mcsed_model,
-                                                     phot_error=args.floor_error,
-                                                     nsamples=args.nobjects)
+        y, yerr, z, truth, true_y, em, emerr = mock_data(args, mcsed_model,
+                                                    phot_error=args.phot_floor_error,
+                                                    nsamples=args.nobjects)
 
         cnts = np.arange(args.count, args.count + len(z))
-
-        for yi, ye, zi, tr, ty, cnt, hl in zip(y, yerr, z, truth, true_y, cnts,
-                                               hlims):
+# WPB: change emline input (?)
+        for yi, ye, zi, tr, ty, cnt, emi, emie in zip(y, yerr, z, truth, true_y, 
+                                               cnts, em, emerr):
             mcsed_model.input_params = tr
             mcsed_model.filter_flag = fl * True
             mcsed_model.set_class_parameters(default)
@@ -576,23 +738,31 @@ def main(argv=None, ssp_info=None):
             mcsed_model.data_fnu_e = ye
             mcsed_model.true_fnu = ty
             mcsed_model.set_new_redshift(zi)
+# WPBWPB: modify? true emission line flux?
+            mcsed_model.data_emline = emi
+            mcsed_model.data_emline_e = emie
+
             mcsed_model.remove_lya_filters()
             if not args.fit_dust_em:
                 mcsed_model.remove_dustem_filters(args.wave_dust_em)
-            for hh, let in zip([hl, None], ['a']):#, 'b']):
-                mcsed_model.sfh_class.hblim = hh
-                mcsed_model.sfh_class.hblim_error = args.hblim_floor
-                mcsed_model.fit_model()
+
+            mcsed_model.fit_model()
+
+            if args.output_dict['sample plot']:
                 mcsed_model.sample_plot('output/sample_fake_%05d_%s' % (cnt, let))
+            if args.output_dict['triangle plot']:
                 mcsed_model.triangle_plot('output/triangle_fake_%05d_%s_%s_%s' % (cnt, let, args.sfh, args.dust_law))
+
             mcsed_model.table.add_row(['Test', cnt, zi] + [0.]*(len(labels)-3))
             last = mcsed_model.add_fitinfo_to_table(percentiles)
             mcsed_model.add_truth_to_table(tr, last)
             print(mcsed_model.table)
     else:
     # WPB field/id
-#        y, yerr, z, flag, objid, field, hb_lim, hbe_lim = read_input_file(args)
         y, yerr, z, flag, objid, field, em, emerr = read_input_file(args)
+##WPBWPB delete
+#        print(read_input_file(args))
+        print(em)
         iv = mcsed_model.get_params()
         for yi, ye, zi, fl, oi, fd, emi, emie in zip(y, yerr, z, flag, objid,
                                                    field, em, emerr):
@@ -603,9 +773,6 @@ def main(argv=None, ssp_info=None):
             mcsed_model.set_new_redshift(zi)
             mcsed_model.data_emline = emi
             mcsed_model.data_emline_e = emie
-#            if hl['Hb_FLUX'] > -99:
-#              mcsed_model.sfh_class.hblim = hl['Hb_FLUX']
-#              mcsed_model.sfh_class.hblim_error = hle['Hb_ERR']
 
             mcsed_model.remove_lya_filters()
             if not args.fit_dust_em:
@@ -618,6 +785,8 @@ def main(argv=None, ssp_info=None):
 #            return
 
             mcsed_model.fit_model()
+##WPBWPB delete
+#            print('I"ve reached this point')
     # WPB field/id
             if args.output_dict['sample plot']:
                 mcsed_model.sample_plot('output/sample_%s_%05d' % (fd, oi), 
@@ -653,13 +822,16 @@ def main(argv=None, ssp_info=None):
             last = mcsed_model.add_fitinfo_to_table(percentiles)
             print(mcsed_model.table)
     if args.parallel:
-# WPB FILL IN -- output_dict['parameters'] keyword
         return [mcsed_model.table, formats]
     else:
         if args.output_dict['parameters']:
             mcsed_model.table.write('output/%s' % args.output_filename,
                                     format='ascii.fixed_width_two_line',
                                     formats=formats, overwrite=True)
+        if args.output_dict['settings']:
+            filename = open('output/%s.args' % args.output_filename, 'w')
+            filename.write( str( vars(args) ) )
+            filename.close()
 if __name__ == '__main__':
     main()
 

@@ -18,8 +18,7 @@ from cosmology import Cosmology
 class constant:
     ''' The constant star formation history '''
     def __init__(self, logsfr=1.0, age=-.5, logsfr_lims=[-3., 3.],
-                 age_lims=[-3., 0.4], logsfr_delta=0.4, age_delta=0.2,
-                 hblim=None):
+                 age_lims=[-3., 0.4], logsfr_delta=0.4, age_delta=0.2):
         ''' Initialize this class
 
         Parameters
@@ -36,7 +35,6 @@ class constant:
             sigma to draw from a normal distribution when simulating galaxies
         age_delta : float
             sigma to draw from a normal distribution when simulating galaxies
-        hblim : WPB FILL IN 
         '''
         self.logsfr = logsfr
         self.age = age
@@ -45,7 +43,6 @@ class constant:
         self.logsfr_delta = logsfr_delta
         self.age_delta = age_delta
         self.nparams = 2
-        self.hblim = hblim
 
     def set_agelim(self, redshift):
         ''' Set the Age limit based on age of the universe '''
@@ -120,7 +117,7 @@ class burst:
                  burst_age_lims=[6., 7.5], burst_sigma_lims=[0.003, 0.5],
                  burst_strength_lims=[1., 10.], logsfr_delta=0.4,
                  age_delta=0.2, burst_age_delta=0.3, burst_sigma_delta=0.005,
-                 burst_strength_delta=2., hblim=None):
+                 burst_strength_delta=2.):
         ''' Initialize this class
 
         Parameters
@@ -153,7 +150,6 @@ class burst:
         self.burst_sigma_delta = burst_sigma_delta
         self.burst_strength_delta = burst_strength_delta
         self.nparams = 4
-        self.hblim = hblim
 
     def set_agelim(self, redshift):
         ''' Set the Age limit based on age of the universe '''
@@ -241,7 +237,7 @@ class burst:
 class polynomial:
     ''' The constant star formation history '''
     def __init__(self, age_locs=[6.5, 7.5, 8.5], age=-.5,
-                 age_lims=[-3., 0.4], age_delta=0.2, hblim=None):
+                 age_lims=[-3., 0.4], age_delta=0.2):
         ''' Initialize this class
 
         Parameters
@@ -276,7 +272,6 @@ class polynomial:
         self.age_lims = age_lims
         self.age_delta = age_delta
         self.nparams = len(age_locs) #+1
-        self.hblim = hblim
 
     def set_agelim(self, redshift):
         ''' Set the Age limit based on age of the universe '''
@@ -368,15 +363,17 @@ class polynomial:
 
 
 class exponential:
+# WPBWPB comment correct? "constant" sfh?
     ''' The constant star formation history '''
     def __init__(self, logsfr=1.0, age=-1.0, tau=-1.5, logsfr_lims=[-3., 3.],
                  age_lims=[-3., 0.4], tau_lims=[-3.5, 3.5],
-                 logsfr_delta=0.3, age_delta=0.2, tau_delta=0.4, hblim=None,
+                 logsfr_delta=0.3, age_delta=0.2, tau_delta=0.4,
                  sign=1.0):
         ''' Initialize this class
 
         Parameters
         ----------
+WPB REWRITE PARAMETERS
         logsfr : float
             Constant SFR in log based 10
         age : float
@@ -400,7 +397,6 @@ class exponential:
         self.tau_lims = tau_lims
         self.tau_delta = tau_delta
         self.nparams = 3
-        self.hblim = hblim
         self.sign = sign
 
     def set_agelim(self, redshift):
@@ -486,8 +482,7 @@ class double_powerlaw:
     def __init__(self, tau=-2.4, a=3.0, b=2., c=1., age=-.5,
                  tau_lims=[-3., 1.], a_lims=[-1., 5.], b_lims=[0., 5.],
                  c_lims=[0., 5.], age_lims=[-3., 0.4], tau_delta=0.2,
-                 a_delta=0.5, b_delta=0.5, c_delta=0.3, age_delta=0.2,
-                 hblim=None):
+                 a_delta=0.5, b_delta=0.5, c_delta=0.3, age_delta=0.2):
         ''' Initialize this class
 
         Parameters
@@ -500,6 +495,10 @@ class double_powerlaw:
             power for rising SFH
         c : float
             power for decling SFH
+        age : float
+            Age of the galaxy when observed in log Gyrs
+        age_lims : list
+            A two valued list for lower and upper boundary values for age
         tau_lims : list
             A two valued list for lower and upper boundary values for tau
         a_lims : list
@@ -508,6 +507,9 @@ class double_powerlaw:
             A two valued list for lower and upper boundary values for b
         c_lims : list
             A two valued list for lower and upper boundary values for c
+        age_delta : float
+            sigma to draw from a normal distribution when simulating galaxies
+WPBWPB add: _delta for remaining parameters
         '''
         self.tau = tau
         self.a = a
@@ -524,7 +526,6 @@ class double_powerlaw:
         self.c_delta = c_delta
         self.age_delta = age_delta
         self.age_lims = age_lims
-        self.hblim = hblim
         self.nparams = 5
 
     def set_agelim(self, redshift):
@@ -606,7 +607,7 @@ class double_powerlaw:
 class empirical_direct:
     ''' The empirical SFH includes 6 bins of SFR at discrete time intervals '''
     def __init__(self, init_log_sfr=1.2, init_log_sfr_lims=[-5., 3.],
-                 init_log_sfr_delta=0.7, hblim=None,
+                 init_log_sfr_delta=0.7,
                  ages=[8., 8.5, 9., 9.3]):
         ''' Initialize this class
         Parameters
@@ -624,7 +625,6 @@ class empirical_direct:
         self.sfr_2_delta = 0.3
         self.age_lims = [-3., self.ages[-1]-9.]
         self.age = self.age_lims[1] * 1.
-        self.hblim = hblim
 
     def set_agelim(self, redshift):
         ''' Set the Age limit based on age of the universe '''
@@ -706,8 +706,7 @@ class empirical_direct:
 class empirical:
     ''' The empirical SFH includes 6 bins of SFR at discrete time intervals '''
     def __init__(self, mass=9.5, mass_lims=[6., 12.],
-                 mass_delta=0.5, ages=[7., 8., 8.5, 9., 9.3],
-                 hblim=None):
+                 mass_delta=0.5, ages=[7., 8., 8.5, 9., 9.3]):
         ''' Initialize this class
 
         Parameters
@@ -732,7 +731,6 @@ class empirical:
         self.firstbin = 1. - total
         self.age_lims = [self.ages[1]-9., self.ages[-1]-9.]
         self.age = self.age_lims[1] * 1.
-        self.hblim = hblim
         self.tdiff = np.diff(10**np.vstack([[0.] + self.ages,
                              [self.age+9.]*(len(self.ages)+1)]).min(axis=0))
 

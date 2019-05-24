@@ -15,6 +15,14 @@ from astropy.convolution import Gaussian1DKernel, convolve
 
 
 def get_coarser_wavelength_fsps(wave, spec):
+    '''
+    smooth the spectrum with a gaussian kernel to improve 
+    computational efficiency
+
+    only affects the wavelength grid
+    (the age and metallicity grids remain unchanged)
+    '''
+# WPBWPB: coarse_wavelength, how specified by user?
     sel = np.where((wave > 500) * (wave < 1e5))[0]
     spec = spec[sel, :]
     wave = wave[sel]
@@ -67,6 +75,21 @@ def read_fsps_neb(filename):
 
 
 def read_fsps_ssp(filename):
+    '''
+    WPBWPB describe
+
+    Returns
+    -------
+    ages : list (1 dim)
+        ages in log years
+    masses : list (1 dim)
+    spec : list (2 dim)
+        spectra in solar bolometric luminosity
+WPBWPB does this make sense? should be flux (luminosity) density?
+    wave : numpy array (1 dim)
+        wavelength for each spectrum spanning 90 Angstroms - 10000 microns
+        in units of Angstroms
+    '''
     cnt = 0
     ages, masses, spec = [], [], []
     with open(filename) as f:
@@ -100,9 +123,13 @@ def read_fsps(args, metallicity):
     masses : numpy array (1 dim)
         Remnant mass at a given age (solar masses)
     wave : numpy array (1 dim)
+        WPBWPB: double check the wavelength grid... it is changed by the coarse grid function
         wavelength for each spectrum spanning 90 Angstroms - 10000 microns
         in units of Angstroms
     spec : numpy array (2 dim)
+WPBWPB: check units, these are not micro-Jy -- changed later?
+update: I think it is f_nu in micro-Jy at 10pc
+WPBWPB: native fsps units: solar bolometric luminosity per Hz
         Spectra in f_nu (ergs/s/cm^2/Hz) at 10pc
     '''
     pc10 = 10. * 3.08567758e18
@@ -126,29 +153,61 @@ def read_fsps(args, metallicity):
     sel = (ages <= 9.5) * (ages >= 6.)
     return 10**(ages[sel]-9), np.ones(ages[sel].shape), wave, spec[:, sel]
 
-
-def add_nebular_emission(ages, wave, spec, logU, metallicity,
+def get_nebular_emission(ages, wave, spec, logU, metallicity,
                          filename='nebular/ZAU_ND_pdva',
-                         sollum=3.826e33):
+                         sollum=3.826e33, kind='both'):
+    ''' WPB FILL IN -- might have issues just summing them up by components
+        --> edit, I think it is okay
+WPBWPB: what is this 1e48 factor?
+    ages : numpy array (1 dim)
+        ages of the SSP models
+    wave : numpy array (1 dim)
+        wavelength for SSP models
+    spec : numpy array (3 dim)
+        SSP spectrum for each age and each metallicity
+    kind : str
+        {'both', 'line', 'cont'}
+        'line', 'cont' return only the line and continuum nebular emission
+        'both' returns line and continuum nebular emission
+    '''
+    while kind not in ['line', 'cont', 'both']:
+        kind = input("Invalid entry. Please enter 'line', 'cont', or 'both'")
     cont_file = filename + '.cont'
     lines_file = filename + '.lines'
     cont_res = [np.array(x) for x in read_fsps_neb(cont_file)]
-    lines_res = [np.array(x) for x in read_fsps_neb(lines_file)]
+    if kind != 'cont':
+        lines_res = [np.array(x) for x in read_fsps_neb(lines_file)]
     # Make array of Z, age, U
     V = np.array([10**cont_res[0]*0.019, cont_res[1]/1e6,
                   cont_res[2]]).swapaxes(0, 1)
-    C = scint.LinearNDInterpolator(V, cont_res[3]*1e48)
-    L = scint.LinearNDInterpolator(V, lines_res[3]*1e48)
-    garray = make_gaussian_emission(wave, lines_res[4])
-    nspec = spec * 1.
+    if kind != 'line':
+        C = scint.LinearNDInterpolator(V, cont_res[3]*1e48)
+    if kind != 'cont':
+        L = scint.LinearNDInterpolator(V, lines_res[3]*1e48)
+        # WPBWPB DO I WANT GAUSSIAN EMISSION?
+        garray = make_gaussian_emission(wave, lines_res[4])
+    nspec = spec * 0.
+# WPBWPB: can I assume that the age array will be in order? can I quit once I pass 1e-2, 
+# i.e. stop searching ages
     for i, age in enumerate(ages):
         if age <= 1e-2:
-            cont = C(metallicity, age*1e3, logU)
-            lines = L(metallicity, age*1e3, logU)
+            if kind != 'line':
+                cont = C(metallicity, age*1e3, logU)
+            if kind != 'cont':
+                lines = L(metallicity, age*1e3, logU)
             qq = number_ionizing_photons(wave, spec[:, i]) / 1e48 * sollum
-            nspec[:, i] = (nspec[:, i] + np.interp(wave, cont_res[4], cont*qq)
-                           + (garray * lines * qq).sum(axis=1))
+            if kind == 'both': 
+                nspec[:, i] = (nspec[:, i] 
+                               + np.interp(wave, cont_res[4], cont*qq)
+                               + (garray * lines * qq).sum(axis=1))
+            if kind == 'line':
+                nspec[:, i] = (nspec[:, i] 
+                               + (garray * lines * qq).sum(axis=1))
+            if kind == 'cont':
+                nspec[:, i] = (nspec[:, i] 
+                               + np.interp(wave, cont_res[4], cont*qq))
     return nspec
+
 
 
 def make_gaussian_emission(wavebig, wave, stddev=1., clight=2.99792e18):
@@ -180,43 +239,71 @@ def read_ssp(args):
     ----------
     args : class
         The args class from mcsed.parse_args()
-
+WPBWPB: need to determine units of all outputs
+WPBWPB: operate under assumption that spec, linespec are in same units
     '''
     import matplotlib.pyplot as plt
-    s, m = ([], [])
+    s, ns, ls, m = ([], [], [], [])
     for met in args.metallicity_dict[args.isochrone]:
         if args.ssp.lower() == 'fsps':
             ages, masses, wave, spec = read_fsps(args, met)
+        # carry nebular and stellar spectra separately
+        # carry emission lines only, for measuring line fluxes
+# WPBWPB: only carry linespec if going to measure emission lines?
         if args.add_nebular:
-            spec = add_nebular_emission(ages, wave, spec, args.logU,
-                                        met)
+            nebspec  = get_nebular_emission(ages, wave, spec, args.logU,
+                                        met, kind='both')
+            linespec = get_nebular_emission(ages, wave, spec, args.logU,
+                                        met, kind='line')
+        else:
+            nebspec  = np.zeros(np.shape(spec))
+            linespec = np.zeros(np.shape(spec))
+
+# WPBWPB add comment
         if args.sfh == 'empirical' or args.sfh == 'empirical_direct':
-            ages, spec = bin_ages_fsps(args, np.log10(ages)+9., spec)
+            ages0 = ages.copy()
+            ages, spec = bin_ages_fsps(args, np.log10(ages0)+9., spec)
+            ages, nebspec = bin_ages_fsps(args, np.log10(ages0)+9., nebspec)
+            ages9, linespec = bin_ages_fsps(args, np.log10(ages0)+9., linespec)
         masses = np.ones(ages.shape)
-        wave, spec = get_coarser_wavelength_fsps(wave, spec)
+        # do not smooth the emission line grid
+        wave0 = wave.copy()
+        wave, spec = get_coarser_wavelength_fsps(wave0, spec)
+        wave, nebspec = get_coarser_wavelength_fsps(wave0, nebspec)
+# WPBWPB delete: don't smooth the emline spectrum
+#        wave9, linespec = get_coarser_wavelength_fsps(wave0, linespec)
         wei = (np.diff(np.hstack([0., ages])) *
                getattr(sfh, args.sfh)().evaluate(ages))
         s.append(spec)
-        m.append(np.dot(spec, wei)/spec.shape[1])
+        ns.append(nebspec)
+        ls.append(linespec)
+# WPBWPB is the following line correct? spec+nebspec? also, appears unused...
+        m.append(np.dot(spec+nebspec, wei)/spec.shape[1])
+
+    # for plotting purposes only
     fig = plt.figure(figsize=(8, 8))
     import seaborn as sns
     colors = sns.color_palette("coolwarm", s[-5].shape[1])
     wei = np.diff(np.hstack([0., ages]))
     for i in np.arange(s[-5].shape[1]):
-        plt.plot(wave, s[-5][:, i] * wei[i] / 1e8, color=colors[i])
+        plt.plot(wave, (s[-5][:, i]+ns[-5][:,i]) * wei[i] / 1e8, color=colors[i])
     plt.xlim([900., 40000.])
     plt.xscale('log')
     plt.yscale('log')
     plt.ylim([1e-5, 10])
     plt.savefig('template_spectra_plot.png')
     plt.close(fig)
+
     spec = np.moveaxis(np.array(s), 0, 2)
+    nebspec = np.moveaxis(np.array(ns), 0, 2)
+    linespec = np.moveaxis(np.array(ls), 0, 2)
     metallicities = args.metallicity_dict[args.isochrone]
-    return ages, masses, wave, spec, np.array(metallicities)
+    return ages, masses, wave, spec, np.array(metallicities), nebspec, wave0, linespec
 
 
 class fsps_freeparams:
     ''' Allowing metallicity to be free -0.39'''
+# WPBWPB why is there an -0.39 in here...? might appear elsewhere too - grep it
     def __init__(self, met=-0.7, met_lims=[-1.98, 0.2], met_delta=0.3,
                  fix_met=False):
         ''' Initialize this class
