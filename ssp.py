@@ -56,6 +56,16 @@ def bin_ages_fsps(args, ages, spec):
 
 
 def read_fsps_neb(filename):
+    '''
+    Returns
+    -------
+    Z : WPBWPB
+    Age : WPBWPB
+    logU : WPBWPB
+    spec : WPBWPB
+    wave : numpy array (1 dim)
+        wavelength for each spectrum in Angstroms
+    '''
     cnt = 0
     Z, Age, logU, spec = [], [], [], []
     with open(filename) as f:
@@ -76,16 +86,13 @@ def read_fsps_neb(filename):
 
 def read_fsps_ssp(filename):
     '''
-    WPBWPB describe
-
     Returns
     -------
     ages : list (1 dim)
         ages in log years
     masses : list (1 dim)
     spec : list (2 dim)
-        spectra in solar bolometric luminosity
-WPBWPB does this make sense? should be flux (luminosity) density?
+        spectra in solar bolometric luminosity per Hz
     wave : numpy array (1 dim)
         wavelength for each spectrum spanning 90 Angstroms - 10000 microns
         in units of Angstroms
@@ -123,14 +130,9 @@ def read_fsps(args, metallicity):
     masses : numpy array (1 dim)
         Remnant mass at a given age (solar masses)
     wave : numpy array (1 dim)
-        WPBWPB: double check the wavelength grid... it is changed by the coarse grid function
-        wavelength for each spectrum spanning 90 Angstroms - 10000 microns
-        in units of Angstroms
+        wavelength grid for each spectrum in units of Angstroms
     spec : numpy array (2 dim)
-WPBWPB: check units, these are not micro-Jy -- changed later?
-update: I think it is f_nu in micro-Jy at 10pc
-WPBWPB: native fsps units: solar bolometric luminosity per Hz
-        Spectra in f_nu (ergs/s/cm^2/Hz) at 10pc
+        Spectra in f_nu (micro Janskies, i.e., 1e-29 ergs/s/cm^2/Hz) at 10pc
     '''
     pc10 = 10. * 3.08567758e18
     solar_microjansky = 3.826e33 * 1e29 / (4. * np.pi * pc10**2)
