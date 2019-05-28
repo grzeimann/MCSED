@@ -25,7 +25,7 @@ class Cosmology:
         self.omega_m = omega_m
         self.omega_l = omega_l
         self.omega_k = omega_k
-        self.H_0 = H_0  # km / s / (10 pc)
+        self.H_0 = H_0  # km / s / Mpc
         self.t_h = 9.78 * (100. / self. H_0)  # Gyr
         self.c = 2.99792e5  # km / s
 
