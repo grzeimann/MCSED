@@ -59,10 +59,15 @@ def read_fsps_neb(filename):
     '''
     Returns
     -------
-    Z : WPBWPB
-    Age : WPBWPB
-    logU : WPBWPB
-    spec : WPBWPB
+    Z : list (1 dim)
+        metallicity grid in log solar units
+    Age : list (1 dim)
+        age grid in years (up to 10 Myr)
+    logU : list (1 dim)
+        ionization parameter grid
+    spec : list (1 dim)
+        elements are spectra (numpy array, 1 dim)
+        WPBWPB units
     wave : numpy array (1 dim)
         wavelength for each spectrum in Angstroms
     '''
@@ -158,8 +163,7 @@ def read_fsps(args, metallicity):
 def get_nebular_emission(ages, wave, spec, logU, metallicity,
                          filename='nebular/ZAU_ND_pdva',
                          sollum=3.826e33, kind='both'):
-    ''' WPB FILL IN -- might have issues just summing them up by components
-        --> edit, I think it is okay
+    ''' 
 WPBWPB: what is this 1e48 factor?
     ages : numpy array (1 dim)
         ages of the SSP models
@@ -186,11 +190,10 @@ WPBWPB: what is this 1e48 factor?
         C = scint.LinearNDInterpolator(V, cont_res[3]*1e48)
     if kind != 'cont':
         L = scint.LinearNDInterpolator(V, lines_res[3]*1e48)
-        # WPBWPB DO I WANT GAUSSIAN EMISSION?
+        # WPBWPB why make_gaussian_emission?
         garray = make_gaussian_emission(wave, lines_res[4])
     nspec = spec * 0.
-# WPBWPB: can I assume that the age array will be in order? can I quit once I pass 1e-2, 
-# i.e. stop searching ages
+# WPBWPB: can I assume that the age array will be in order? can I quit once I pass 1e-2, i.e. stop searching ages
     for i, age in enumerate(ages):
         if age <= 1e-2:
             if kind != 'line':

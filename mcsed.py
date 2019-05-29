@@ -220,6 +220,38 @@ WPBWPB units + are dimensions correct??
         self.data_fnu = self.data_fnu[newflags]
         self.data_fnu_e = self.data_fnu_e[newflags]
 
+    def remove_waverange_filters(self, wave1, wave2, restframe=True):
+        '''Remove filters in a given wavelength range
+
+        Parameters
+        ----------
+        wave1 : float
+            start wavelength of masked range (in Angstroms)
+        wave2 : float
+            end wavelength of masked range (in Angstroms)
+        restframe : bool
+            if True, wave1 and wave2 correspond to rest-frame wavelengths
+        '''
+        wave1, wave2 = np.sort([wave1, wave2])
+        if restframe:
+            wave_factor = 1. + self.redshift
+        else:
+            wave_factor = 1.
+        loc = np.searchsorted(self.wave, wave1 * wave_factor)
+        loc2 = np.searchsorted(self.wave, wave2 * wave_factor)
+        maxima = np.max(self.filter_matrix, axis=0)
+        newflag = np.max(self.filter_matrix[:loc, :], axis=0) < maxima * 0.1
+        newflag2 = np.max(self.filter_matrix[loc2:, :], axis=0) < maxima * 0.1
+        maximas = np.max(self.filter_matrix[:, self.filter_flag], axis=0)
+        newflags = np.max(self.filter_matrix[:loc, self.filter_flag], axis=0) < maximas * 0.1
+        newflags2 = np.max(self.filter_matrix[loc2:, self.filter_flag], axis=0) < maximas * 0.1
+        self.filter_flag = self.filter_flag * newflag * newflag2
+        if self.true_fnu is not None:
+            self.true_fnu = self.true_fnu[newflags * newflags2]
+        self.data_fnu = self.data_fnu[newflags*newflags2]
+        self.data_fnu_e = self.data_fnu_e[newflags*newflags2]
+
+
     def get_filter_wavelengths(self):
         ''' FILL IN
         '''
