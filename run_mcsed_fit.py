@@ -634,12 +634,12 @@ def main(argv=None, ssp_info=None):
 #        return
 
         args.log.info('Reading in SSP model')
-        ages, masses, wave, SSP, met, nebSSP, linewave, lineSSP = read_ssp(args)
+        ages, masses, wave, SSP, met, linewave, lineSSP = read_ssp(args)
 ## WPBWPB delete
 #        print((wave.shape, linewave.shape))
 
     else:
-        ages, masses, wave, SSP, met, nebSSP, linewave, lineSSP = ssp_info
+        ages, masses, wave, SSP, met, linewave, lineSSP = ssp_info
 
 # alternative: I have a function that collapses linewave, lineSSP. so no measure emline method in mcsed.py. 
 
@@ -648,7 +648,7 @@ def main(argv=None, ssp_info=None):
 
     # Make one instance of Mcsed for speed on initialization
     # Then replace the key variables each iteration for a given galaxy
-    mcsed_model = Mcsed(filter_matrix, SSP, nebSSP, linewave, lineSSP, ages, 
+    mcsed_model = Mcsed(filter_matrix, SSP, linewave, lineSSP, ages, 
                         masses, met, wave, args.sfh,
                         args.dust_law, args.dust_em, nwalkers=args.nwalkers,
                         nsteps=args.nsteps)

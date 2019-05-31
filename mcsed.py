@@ -33,7 +33,7 @@ plt.ioff()
 
 #WPBWPB re organize the arguments (aesthetic purposes)
 class Mcsed:
-    def __init__(self, filter_matrix, ssp_spectra, ssp_nebspectra,
+    def __init__(self, filter_matrix, ssp_spectra,
                  emlinewave, ssp_emline, ssp_ages, ssp_masses,
                  ssp_met, wave, sfh_class, dust_abs_class, dust_em_class,
                  data_fnu=None, data_fnu_e=None, 
@@ -51,8 +51,6 @@ class Mcsed:
         ssp_spectra : numpy array (3 dim)
             single stellar population spectrum for each age in ssp_ages
             and each metallicity in ssp_met 
-        ssp_nebspectra : numpy array (3 dim)
-            nebular emission component corresponding to ssp_spectra
         emlinewave : numpy array (1 dim)
             initially, unsmoothed wavelength grid for emission line SSP grid
             modified to only include desired emission lines
@@ -119,8 +117,7 @@ WPBWPB units + are dimensions correct??
         '''
         # Initialize all argument inputs
         self.filter_matrix = filter_matrix
-        self.ssp_spectra = ssp_nebspectra
-        self.ssp_nebspectra = ssp_nebspectra
+        self.ssp_spectra = ssp_spectra
         self.emlinewave = emlinewave
         self.ssp_emline = ssp_emline
         self.ssp_ages = ssp_ages
@@ -135,7 +132,6 @@ WPBWPB units + are dimensions correct??
 # WPBWPB: describe SSP, lineSSP in comments... 
 # ssp_spectra span many metallicities, SSP only span ages
         self.SSP = None
-        self.nebSSP = None
         self.lineSSP = None
 # WPBWPB is ssp_class still a thing?
         self.param_classes = ['sfh_class', 'dust_abs_class', 'ssp_class',
@@ -327,27 +323,20 @@ WPBWPB units + are dimensions correct??
             if self.SSP is not None:
 ## WPBWPB delete
 #                print('self.SSP is not None!')
-                return self.SSP, self.nebSSP, self.lineSSP
+                return self.SSP, self.lineSSP
         Z = np.log10(self.ssp_met)
         z = self.ssp_class.met + np.log10(0.019)
         X = Z - z
         wei = np.exp(-(X)**2 / (2. * 0.15**2))
         wei /= wei.sum()
-# WPBWPB delete
-        print('this is shape of self.SSP before/after dotting')
-        print(self.ssp_spectra.shape)
         self.SSP = np.dot(self.ssp_spectra, wei)
-# WPBWPB delete
-        print(self.SSP.shape)
-        return
-        self.nebSSP = np.dot(self.ssp_nebspectra, wei)
         # only treat the emission line grid if it has nonzero elements
         # (only need to check the youngest few ages)
         if np.max(self.ssp_emline[:,0:10,:]) > 0:
             self.lineSSP = np.dot(self.ssp_emline, wei)
         else:
             self.lineSSP = self.ssp_emline[:,:,0]
-        return self.SSP, self.nebSSP, self.lineSSP
+        return self.SSP, self.lineSSP
 
 # separate function for ssp_spectrum nebular, stellar
 # WPBWPB: possibly also output an emission-line strength dictionary from the CSP?
@@ -365,7 +354,7 @@ WPBWPB units??
             Mass for csp given the SFH input
         '''
         # Collapse for metallicity
-        SSP, nebSSP, lineSSP = self.get_ssp_spectrum()
+        SSP, lineSSP = self.get_ssp_spectrum()
 
         # Need star formation rate from observation back to formation
         if sfr is None:
@@ -392,7 +381,6 @@ WPBWPB units??
             B = np.nonzero(self.ssp_ages >= ageval)[0][0]
             if A == B:
                 spec_dustfree     = np.dot(SSP, weight)
-                nebspec_dustfree  = np.dot(nebSSP, weight)
                 linespec_dustfree = np.dot(lineSSP, weight)
                 mass = np.sum(weight * self.ssp_masses)
             else:
@@ -400,12 +388,10 @@ WPBWPB units??
                 wei = lw * 1e9 * np.interp(ageval, self.ssp_ages, sfr)
                 weight[B] = wei
                 spec_dustfree     = np.dot(SSP, weight)
-                nebspec_dustfree  = np.dot(nebSSP, weight)
                 linespec_dustfree = np.dot(lineSSP, weight)
                 mass = np.sum(weight * self.ssp_masses)
         else:
             spec_dustfree     = np.dot(SSP, weight)
-            nebspec_dustfree  = np.dot(nebSSP, weight)
             linespec_dustfree = np.dot(lineSSP, weight)
             mass = np.sum(weight * self.ssp_masses)
 
@@ -417,7 +403,6 @@ WPBWPB units??
 # if attenuating it directly tied to overall dust law,
 # modified by coefficient between EBV_stars ~ gas, get it here
         Alam_gas = Alam / self.dust_abs_class.EBV_stars_gas
-        nebspec_dustobscured  = nebspec_dustfree * 10**(-0.4 * Alam_gas)
 
         # recompute attenuation for the finer wavelength grid of emission lines 
         Alam_gas_emline = (self.dust_abs_class.evaluate(self.emlinewave,new_wave=True)
@@ -427,8 +412,6 @@ WPBWPB units??
 # WPBWPB fix this, attenuate the nebular emission differently
 
 # WPBWPB: do I need to change units of linespec? what are current units and what do I want?
-        # Combine the dust-corrected stellar and nebular emission spectra
-        spec_dustobscured += nebspec_dustobscured
 
 # WPB: exclude dust emission component altogether? Does it make a difference?
         # Change in bolometric Luminosity
