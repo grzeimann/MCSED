@@ -44,7 +44,7 @@ logU = -2.
 # minimum photometric error (fractional uncertainty in units of specific flux)
 phot_floor_error = 0.10 
 # minimum emission line error (absolute uncertainty in units of ergs / s / cm2)
-# WPB: NOTE: currently only used in test mode
+# WPB: NOTE: currently only used in test mode -- modify when reading in user data
 emline_floor_error = 0.65e-17
 
 # Use input photometry and emission lines
@@ -65,7 +65,7 @@ emline_list_dict = {'OII' : 3727., 'OIII' : 5007.,
                     'Hb' : 4861., 'Ha' : 6563.}
 emline_factor = 1e-17 # numerical conversion from input values to units ergs/cm2/s
 # WPBWPB delete
-#emline_list_dict = None #{}
+emline_list_dict = None #{}
 
 # Use metallicity-mass relationship from Ma et al. 2016
 # NOTE: currently unavailable

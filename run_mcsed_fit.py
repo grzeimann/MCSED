@@ -656,10 +656,14 @@ def main(argv=None, ssp_info=None):
     # Collapse the emission line SSP grid to include only the desired lines
     # Speeds up the CSP construction
     mcsed_model.emline_dict = args.emline_list_dict
-    if mcsed_model.emline_dict not in [None, {}]:
+    if (mcsed_model.emline_dict in [None, {}]):
+        mcsed_model.use_emline_flux = False
+    elif (not args.test) & (not args.use_input_data):
         mcsed_model.use_emline_flux = False
     else:
         mcsed_model.use_emline_flux = True
+# WPBWPB delete
+        print('I"M READING THE LINE SSP STUFF')
         mcsed_model.measure_emlineSSP_flux()
 
 
@@ -750,9 +754,12 @@ def main(argv=None, ssp_info=None):
             mcsed_model.data_emline = emi
             mcsed_model.data_emline_e = emie
 
-            mcsed_model.remove_lya_filters()
+            # Remove filters containing Lyman-alpha (and those blueward)
+            mcsed_model.remove_waverange_filters(0., 1216., restframe=True)
+            # Remove filters dominated by dust emission, if applicable
             if not args.fit_dust_em:
-                mcsed_model.remove_dustem_filters(args.wave_dust_em)
+                mcsed_model.remove_waverange_filters(args.wave_dust_em*1e4,1e10,
+                                                     restframe=True)
 
             mcsed_model.fit_model()
 
@@ -770,7 +777,7 @@ def main(argv=None, ssp_info=None):
         y, yerr, z, flag, objid, field, em, emerr = read_input_file(args)
 ##WPBWPB delete
 #        print(read_input_file(args))
-        print(em)
+#        print(em)
         iv = mcsed_model.get_params()
         for yi, ye, zi, fl, oi, fd, emi, emie in zip(y, yerr, z, flag, objid,
                                                    field, em, emerr):
@@ -782,11 +789,23 @@ def main(argv=None, ssp_info=None):
             mcsed_model.data_emline = emi
             mcsed_model.data_emline_e = emie
 
-            mcsed_model.remove_lya_filters()
-            if not args.fit_dust_em:
-                mcsed_model.remove_dustem_filters(args.wave_dust_em)
-
 # WPB delete
+            fwave = mcsed_model.get_filter_wavelengths()
+            print('these are filter wavelengths:')
+            print(np.sort(fwave))
+            dummy = mcsed_model.remove_waverange_filters(79560.,1e9,restframe=False)
+            fwave = mcsed_model.get_filter_wavelengths()
+            print(np.sort(fwave))
+            return
+
+            # Remove filters containing Lyman-alpha (and those blueward)
+            mcsed_model.remove_waverange_filters(0., 1216., restframe=True)
+            # Remove filters dominated by dust emission, if applicable
+            if not args.fit_dust_em:
+                mcsed_model.remove_waverange_filters(args.wave_dust_em*1e4,1e10, 
+                                                     restframe=True)
+
+## WPB delete
 #            fwave = mcsed_model.get_filter_wavelengths()
 #            print('these are filter wavelengths:')
 #            print(np.sort(fwave))

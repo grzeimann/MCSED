@@ -196,35 +196,6 @@ WPBWPB units + are dimensions correct??
             self.log.setLevel(logging.DEBUG)
             self.log.addHandler(handler)
 
-    def remove_lya_filters(self):
-        '''Remove filters blueward of and containing rest-frame Lyman alpha
-        '''
-        loc = np.searchsorted(self.wave, 1216. * (1. + self.redshift))
-        maxima = np.max(self.filter_matrix, axis=0)
-        newflag = np.max(self.filter_matrix[:loc, :], axis=0) < maxima * 0.1
-        maximas = np.max(self.filter_matrix[:, self.filter_flag], axis=0)
-        newflags = np.max(self.filter_matrix[:loc, self.filter_flag], axis=0) < maximas * 0.1
-        self.filter_flag = self.filter_flag * newflag 
-        if self.true_fnu is not None:
-            self.true_fnu = self.true_fnu[newflags]
-        self.data_fnu = self.data_fnu[newflags]
-        self.data_fnu_e = self.data_fnu_e[newflags]
-
-    def remove_dustem_filters(self, wave0=2.5):
-        '''Remove filters redward of rest-frame wave0 microns
-        where the SED becomes dominated by dust emission
-        '''
-        loc = np.searchsorted(self.wave, wave0*1e4 * (1. + self.redshift))
-        maxima = np.max(self.filter_matrix, axis=0)
-        newflag = np.max(self.filter_matrix[loc:, :], axis=0) < maxima * 0.1
-        maximas = np.max(self.filter_matrix[:, self.filter_flag], axis=0)
-        newflags = np.max(self.filter_matrix[loc:, self.filter_flag], axis=0) < maximas * 0.1
-        self.filter_flag = self.filter_flag * newflag 
-        if self.true_fnu is not None:
-            self.true_fnu = self.true_fnu[newflags]
-        self.data_fnu = self.data_fnu[newflags]
-        self.data_fnu_e = self.data_fnu_e[newflags]
-
     def remove_waverange_filters(self, wave1, wave2, restframe=True):
         '''Remove filters in a given wavelength range
 
@@ -242,19 +213,23 @@ WPBWPB units + are dimensions correct??
             wave_factor = 1. + self.redshift
         else:
             wave_factor = 1.
-        loc = np.searchsorted(self.wave, wave1 * wave_factor)
+        loc1 = np.searchsorted(self.wave, wave1 * wave_factor)
         loc2 = np.searchsorted(self.wave, wave2 * wave_factor)
+        # account for the case where indices are the same
+        if (loc1 == loc2):
+            loc2+=1
         maxima = np.max(self.filter_matrix, axis=0)
-        newflag = np.max(self.filter_matrix[:loc, :], axis=0) < maxima * 0.1
-        newflag2 = np.max(self.filter_matrix[loc2:, :], axis=0) < maxima * 0.1
+        try:
+            newflag = np.max(self.filter_matrix[loc1:loc2, :], axis=0) < maxima * 0.1
+        except ValueError:
+            return
         maximas = np.max(self.filter_matrix[:, self.filter_flag], axis=0)
-        newflags = np.max(self.filter_matrix[:loc, self.filter_flag], axis=0) < maximas * 0.1
-        newflags2 = np.max(self.filter_matrix[loc2:, self.filter_flag], axis=0) < maximas * 0.1
-        self.filter_flag = self.filter_flag * newflag * newflag2
+        newflags = np.max(self.filter_matrix[loc1:loc2, self.filter_flag], axis=0) < maximas * 0.1
+        self.filter_flag = self.filter_flag * newflag
         if self.true_fnu is not None:
-            self.true_fnu = self.true_fnu[newflags * newflags2]
-        self.data_fnu = self.data_fnu[newflags*newflags2]
-        self.data_fnu_e = self.data_fnu_e[newflags*newflags2]
+            self.true_fnu = self.true_fnu[newflags]
+        self.data_fnu = self.data_fnu[newflags]
+        self.data_fnu_e = self.data_fnu_e[newflags]
 
 
     def get_filter_wavelengths(self):
@@ -467,9 +442,10 @@ WPBWPB units??
         Modifies emission line wavelength grid to only contain desired lines
         '''
 # WPBWPB modify - some better error catching / abort criteria?
-        if self.ssp_emline is None:
-            return
         if not self.use_emline_flux:
+            # If don't care about measuring emission lines, set as all zeros
+            self.ssp_emline = self.ssp_emline[0:2,:,:]
+            self.emlinewave = np.zeros(2)
             return
 # loop through all emission line spectra for all ages, metallicities
 # WPBWPB: generalize such that does not assume only grid over ages and metallicities, but maybe ionization parameter (or arbitrary number of properties)
