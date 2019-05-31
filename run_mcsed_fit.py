@@ -573,8 +573,8 @@ def main(argv=None, ssp_info=None):
     The redshift is fixed in the fitting
     '''
 
-    # Check if parallel mode is requested, and run if so
-
+    # Make output folder if it doesn't exist
+    mkpath('output')
 
     # Get Inputs
     if argv == None:
@@ -637,8 +637,11 @@ def main(argv=None, ssp_info=None):
         ages, masses, wave, SSP, met, nebSSP, linewave, lineSSP = read_ssp(args)
 ## WPBWPB delete
 #        print((wave.shape, linewave.shape))
+
     else:
         ages, masses, wave, SSP, met, nebSSP, linewave, lineSSP = ssp_info
+
+# alternative: I have a function that collapses linewave, lineSSP. so no measure emline method in mcsed.py. 
 
     # Build Filter Matrix
     filter_matrix = build_filter_matrix(args, wave)
@@ -649,6 +652,17 @@ def main(argv=None, ssp_info=None):
                         masses, met, wave, args.sfh,
                         args.dust_law, args.dust_em, nwalkers=args.nwalkers,
                         nsteps=args.nsteps)
+
+    # Collapse the emission line SSP grid to include only the desired lines
+    # Speeds up the CSP construction
+    mcsed_model.emline_dict = args.emline_list_dict
+    if mcsed_model.emline_dict not in [None, {}]:
+        mcsed_model.use_emline_flux = False
+    else:
+        mcsed_model.use_emline_flux = True
+        mcsed_model.measure_emlineSSP_flux()
+
+
 ## WPBWPB delete
 #    return
 #    # WPB delete -- modify to following section and uncomment
@@ -682,12 +696,6 @@ def main(argv=None, ssp_info=None):
 
     if not args.fit_dust_em:
         mcsed_model.dust_em_class.fixed = True
-
-    # set list of possible emission lines
-    mcsed_model.emline_dict = args.emline_list_dict
-
-    # Make output folder if it doesn't exist
-    mkpath('output')
 
     # Build names for parameters and labels for table
     names = mcsed_model.get_param_names()
@@ -738,7 +746,7 @@ def main(argv=None, ssp_info=None):
             mcsed_model.data_fnu_e = ye
             mcsed_model.true_fnu = ty
             mcsed_model.set_new_redshift(zi)
-# WPBWPB: modify? true emission line flux?
+# WPBWPB: modify? true or perturbed emission line flux?
             mcsed_model.data_emline = emi
             mcsed_model.data_emline_e = emie
 
