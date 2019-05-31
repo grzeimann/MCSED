@@ -14,16 +14,25 @@ import scipy.interpolate as scint
 from astropy.convolution import Gaussian1DKernel, convolve
 
 
-def get_coarser_wavelength_fsps(wave, spec):
+def get_coarser_wavelength_fsps(wave, spec, redwave=1e5):
     '''
     smooth the spectrum with a gaussian kernel to improve 
     computational efficiency
 
     only affects the wavelength grid
     (the age and metallicity grids remain unchanged)
+
+    Parameters
+    ----------
+    wave : numpy array (1d)
+        initial wavelength grid
+    spec : numpy array
+        initial SSP grid over (wave, age, metallicity)
+    redwave : float
+        red wavelength cutoff (in Angstroms)
     '''
 # WPBWPB: coarse_wavelength, how specified by user?
-    sel = np.where((wave > 500) * (wave < 1e5))[0]
+    sel = np.where((wave > 500) * (wave < redwave))[0]
     spec = spec[sel, :]
     wave = wave[sel]
     G = Gaussian1DKernel(25)
@@ -292,9 +301,10 @@ WPBWPB: operate under assumption that spec, linespec are in same units
         masses = np.ones(ages.shape)
         # do not smooth the emission line grid
         wave0 = wave.copy()
-        wave, spec = get_coarser_wavelength_fsps(wave0, spec)
-# WPBWPB delete: don't smooth the emline spectrum
-#        wave9, linespec = get_coarser_wavelength_fsps(wave0, linespec)
+        if args.fit_dust_em:
+            wave, spec = get_coarser_wavelength_fsps(wave0, spec, redwave=200e4)
+        else:
+            wave, spec = get_coarser_wavelength_fsps(wave0, spec)
         wei = (np.diff(np.hstack([0., ages])) *
                getattr(sfh, args.sfh)().evaluate(ages))
         s.append(spec)
