@@ -52,6 +52,10 @@ def get_coarser_wavelength_fsps(wave, spec, redwave=1e5):
 
 
 def bin_ages_fsps(args, ages, spec):
+    ''' FILL IN
+
+    returns age (Gyr), blah
+    '''
     sfh_class = getattr(sfh, args.sfh)()
     sel = ages >= 6.
     ages, spec = (ages[sel], spec[:, sel])
@@ -273,7 +277,7 @@ def collapse_emline_SSP(args, linewave, linespec, clight=2.99792e18):
 # WPBWPB: generalize such that does not assume only grid over ages and metallicities, but maybe ionization parameter (or arbitrary number of properties)
 # maybe I want to raise an error?
     emlines, emwaves = args.emline_list_dict.keys(), args.emline_list_dict.values()
-    ssp_emline_collapsed = self.ssp_emline[0:len(emlines),:,:]
+    ssp_emline_collapsed = linespec[0:len(emlines),:,:]
     waves_collapsed = []
     # loop through emission line spectra for all ages, metallicities
     dims = linespec.shape
@@ -394,6 +398,9 @@ WPBWPB: operate under assumption that spec, linespec are in same units
 
     # Collapse the emission line SSP grid
     linewave, linespec = collapse_emline_SSP(args, wave0, linespec) 
+
+# WPB delete
+    print('these are ages: %s' % ages)
 
     return ages, masses, wave, spec, np.array(metallicities), linewave,linespec
 

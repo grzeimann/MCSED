@@ -608,7 +608,7 @@ class empirical_direct:
     ''' The empirical SFH includes 6 bins of SFR at discrete time intervals '''
     def __init__(self, init_log_sfr=1.2, init_log_sfr_lims=[-5., 3.],
                  init_log_sfr_delta=0.7,
-                 ages=[8., 8.5, 9., 9.3]):
+                 ages=[7., 8., 8.5, 9., 9.3]):
         ''' Initialize this class
         Parameters
         ----------

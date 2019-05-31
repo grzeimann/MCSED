@@ -320,9 +320,124 @@ WPBWPB units + are dimensions correct??
 # separate function for ssp_spectrum nebular, stellar
 # WPBWPB: possibly also output an emission-line strength dictionary from the CSP?
 # --> useful for measuring line strength from the spectrum
+    def build_dustfree_CSP(self, sfr, ageval, age_birth):
+        '''WPBWPB FILL IN
+
+        Parameters
+        ----------
+        sfr : WPBWPB units and form 
+        ageval : float
+            Current age of the object in Gyr
+        age_birth : float
+            Longevity of a birth cloud in Gyr
+
+        Returns
+        -------
+        spec_dustfree : 
+        spec_birth_dustfree :
+        linespec_dustfree : 
+        mass :        
+        '''
+        # Consider the case where the entire system is within the birth cloud
+        if ageval <= age_birth:
+            all_in_birth = True
+        else:
+            all_in_birth = False
+
+        # ageval sets limit on ssp_ages that are useable in model calculation
+        # both are in units Gyr
+##WPB DELETE
+#        sel = self.ssp_ages <= ageval
+        sel = (self.ssp_ages > age_birth) & (self.ssp_ages <= ageval)
+        sel_birth = (self.ssp_ages <= age_birth) & (self.ssp_ages <= ageval)
+        sel_age = self.ssp_ages <= ageval
+
+        # The weight is the time between ages of each SSP
+        weight = np.diff(np.hstack([0, self.ssp_ages])) * 1e9 * sfr
+        weight_birth = weight.copy()
+        weight_age = weight.copy()
+        # Ages greater than ageval should have zero weight in CSP
+        # weight should only include populations younger than ageval
+        # and older than age_birth
+        # weight_age only considers the age of the system (for mass)
+        weight[~sel] = 0
+        weight_birth[~sel_birth] = 0
+        weight_age[~sel_age] = 0
+
+        # Cover the two cases where ssp_ages contains ageval and when not
+        A = np.nonzero(self.ssp_ages <= ageval)[0][-1]
+        select_too_old = np.nonzero(self.ssp_ages >= ageval)[0]
+        if len(select_too_old):
+            B = np.nonzero(self.ssp_ages >= ageval)[0][0]
+            if A == B:
+                spec_dustfree = np.dot(SSP, weight)
+                mass = np.sum(weight * self.ssp_masses)
+            else:
+                lw = ageval - self.ssp_ages[A]
+                wei = lw * 1e9 * np.interp(ageval, self.ssp_ages, sfr)
+                weight[B] = wei
+                spec_dustfree = np.dot(SSP, weight)
+                mass = np.sum(weight * self.ssp_masses)
+        else:
+            spec_dustfree = np.dot(SSP, weight)
+            mass = np.sum(weight * self.ssp_masses)
+
+# ISSUES: I think right now I require both A and B...
+
+        # Adjust the weights
+        # Cover the two cases where ssp_ages contains ageval and when not
+        # and consider case where ssp_ages contains age_birth
+        select_too_old  = np.nonzero(self.ssp_ages >= ageval)[0]
+        select_acceptable = np.nonzero(self.ssp_ages <= ageval)[0]
+        A, B = None, None
+        if (len(select_too_old)): # & (len(select_too_young)):
+            A = np.nonzero(self.ssp_ages <= ageval)[0][-1]
+        if (len(select_acceptable)):
+            B = np.nonzero(self.ssp_ages >= ageval)[0][0]
+#            if (A == B) & (Ab == Bb): I don't have to change the weights
+#                spec_dustfree     = np.dot(self.SSP, weight)
+#                spec_birth_dustfree = np.dot(self.SSP, weight_birth) 
+#                linespec_dustfree = np.dot(self.lineSSP, weight_birth)
+#                mass = np.sum((weight + weight_birth) * self.ssp_masses)
+        if (A == B) & (A is not None):
+            # nothing is required
+            pass
+        else: 
+            lw = ageval - self.ssp_ages[A]
+            wei = lw * 1e9 * np.interp(ageval, self.ssp_ages, sfr)
+            weight[B] = wei
+            weight_age[B] = wei
+
+        # Similarly, consider case where ssp_ages contains age_birth
+
+
+#        # WPBWPB delete: Ab is first valid entry
+#        Ab = np.nonzero(self.ssp_ages > age_birth)[0][0]
+#        select_too_young = np.nonzero(self.ssp_ages > age_birth)[0]
+#        Bb = np.nonzero(self.ssp_ages < age_birth)[0][-1]
+
+# approach: change weights if I have to, then compute
+
+#        # if neither of them, do nothing
+#        else:
+#            spec_dustfree     = np.dot(SSP, weight)
+#            linespec_dustfree = np.dot(lineSSP, weight)
+#            mass = np.sum(weight * self.ssp_masses)
+
+
+        # Finally, do the matrix multiplication
+        spec_dustfree = np.dot(self.SSP, weight)
+        spec_birth_dustfree = np.dot(self.SSP, weight_birth)
+        linespec_dustfree = np.dot(self.lineSSP, weight_birth)
+        mass = np.sum(weight_age * self.ssp_masses)
+
+
+
     def build_csp(self, sfr=None):
         '''Build a composite stellar population model for a given star
         formation history, dust attenuation law, and dust emission law.
+
+        In addition to the returns it also modifies a lineflux dictionary
 
         Returns
         -------
@@ -338,41 +453,21 @@ WPBWPB units??
         # Need star formation rate from observation back to formation
         if sfr is None:
             sfr = self.sfh_class.evaluate(self.ssp_ages)
-        ageval = 10**self.sfh_class.age
+# WPBWPB confused: ages in log Gyr or Gyr?
+        ageval = 10**self.sfh_class.age # Gyr
 
-# WPBWPB delete
-#        print('this is the ageval: %s' % ageval)
+        # Treat the birth cloud and diffuse component separately
+# WPBWPB: may want to modify: have this as user-defined setting...
+        age_birth = 10**-2 # Gyr 
 
-# WPBWPB: I *think* I can just adapt this section to carry the young stars separately
+### WPBWPB delete - both in Gyr
+##        print('this is the ageval: %s' % ageval)
+##        print('this is ssp ages: %s' % self.ssp_ages)
+##        return
 
-        # ageval sets limit on ssp_ages that are useable in model calculation
-        sel = self.ssp_ages <= ageval
-
-        # The weight is the time between ages of each SSP
-        weight = np.diff(np.hstack([0, self.ssp_ages])) * 1e9 * sfr
-        # Ages greater than ageval should have zero weight in csp
-        weight[~sel] = 0
-
-        # Cover the two cases where ssp_ages contains ageval and when not
-        A = np.nonzero(self.ssp_ages <= ageval)[0][-1]
-        select_too_old = np.nonzero(self.ssp_ages >= ageval)[0]
-        if len(select_too_old):
-            B = np.nonzero(self.ssp_ages >= ageval)[0][0]
-            if A == B:
-                spec_dustfree     = np.dot(SSP, weight)
-                linespec_dustfree = np.dot(lineSSP, weight)
-                mass = np.sum(weight * self.ssp_masses)
-            else:
-                lw = ageval - self.ssp_ages[A]
-                wei = lw * 1e9 * np.interp(ageval, self.ssp_ages, sfr)
-                weight[B] = wei
-                spec_dustfree     = np.dot(SSP, weight)
-                linespec_dustfree = np.dot(lineSSP, weight)
-                mass = np.sum(weight * self.ssp_masses)
-        else:
-            spec_dustfree     = np.dot(SSP, weight)
-            linespec_dustfree = np.dot(lineSSP, weight)
-            mass = np.sum(weight * self.ssp_masses)
+        # Get dust-free CSPs, properly accounting for ages
+        spec_dustfree, spec_birth_dustfree, linespec_dustfree, mass 
+                       = build_dustfree_CSP(sfr, ageval, age_birth)
 
         # Need to correct spectrum for dust attenuation
         Alam = self.dust_abs_class.evaluate(self.wave)
@@ -393,8 +488,6 @@ WPBWPB units??
 #        print('shape of linespec_dustfree, emwaves : (%s, %s)' % (linespec_dustfree.shape, emwaves.shape))
         linespec_dustobscured = linespec_dustfree * 10**(-0.4*Alam_emline)
 # else, use a screen model
-
-# WPBWPB: do I need to change units of linespec? what are current units and what do I want?
 
 # WPB: exclude dust emission component altogether? Does it make a difference?
         # Change in bolometric Luminosity
@@ -615,6 +708,17 @@ WPBWPB units??
                                                np.log10(x), -99.)
         new_chain[:, :, -1] = sampler.lnprobability
         self.samples = new_chain[:, burnin_step:, :].reshape((-1, ndim+2))
+
+    def get_derived_params(self):
+        ''' These are not free parameters in the model, but are instead
+        calculated from free parameters
+        '''
+
+        t20 = None
+        t50 = None
+        sfr10 = None
+        sfr100 = None
+
 
     def spectrum_plot(self, ax, color=[0.996, 0.702, 0.031], alpha=0.1):
         ''' Make spectum plot for current model '''

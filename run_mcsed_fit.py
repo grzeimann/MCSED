@@ -649,11 +649,11 @@ def main(argv=None, ssp_info=None):
         ages, masses, wave, SSP, met, linewave, lineSSP = read_ssp(args)
 ## WPBWPB delete
 #        print((wave.shape, linewave.shape))
+#        print(ages)
+#        return
 
     else:
         ages, masses, wave, SSP, met, linewave, lineSSP = ssp_info
-
-# alternative: I have a function that collapses linewave, lineSSP. so no measure emline method in mcsed.py. 
 
     # Build Filter Matrix
     filter_matrix = build_filter_matrix(args, wave)
