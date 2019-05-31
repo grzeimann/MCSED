@@ -65,7 +65,7 @@ emline_list_dict = {'OII' : 3727., 'OIII' : 5007.,
                     'Hb' : 4861., 'Ha' : 6563.}
 emline_factor = 1e-17 # numerical conversion from input values to units ergs/cm2/s
 # WPBWPB delete
-emline_list_dict = None #{}
+#emline_list_dict = None #{}
 
 # Use metallicity-mass relationship from Ma et al. 2016
 # NOTE: currently unavailable

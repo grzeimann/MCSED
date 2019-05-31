@@ -173,7 +173,6 @@ def get_nebular_emission(ages, wave, spec, logU, metallicity,
                          filename='nebular/ZAU_ND_pdva',
                          sollum=3.826e33, kind='both'):
     ''' 
-WPBWPB: what is this 1e48 factor?
     ages : numpy array (1 dim)
         ages of the SSP models
     wave : numpy array (1 dim)
@@ -196,6 +195,7 @@ WPBWPB: what is this 1e48 factor?
     V = np.array([10**cont_res[0]*0.019, cont_res[1]/1e6,
                   cont_res[2]]).swapaxes(0, 1)
     if kind != 'line':
+        # 1e48 factor avoids interpolating small numbers - removed later
         C = scint.LinearNDInterpolator(V, cont_res[3]*1e48)
     if kind != 'cont':
         L = scint.LinearNDInterpolator(V, lines_res[3]*1e48)
@@ -244,6 +244,68 @@ def add_nebular_emission(ages, wave, spec, logU, metallicity,
             nspec[:, i] = (nspec[:, i] + np.interp(wave, cont_res[4], cont*qq)
                            + (garray * lines * qq).sum(axis=1))
     return nspec
+
+def collapse_emline_SSP(args, linewave, linespec, clight=2.99792e18):
+    '''Speed up construction of emission line fluxes from the CSP
+
+    Parameters
+    ----------
+    args : dictionary
+        user-passed arguments from config.py and command line
+    linewave : numpy array (1 dim)
+        wavelength for SSP models
+    linespec : numpy array (3 dim)
+        SSP spectrum for each age and each metallicity
+
+    Returns
+    -------
+    linewave : numpy array (1 dim)
+        collapsed wavelength grid of emission lines
+    linespec : numpy array (3 dim)
+        collapsed SSP spectrum for each age and each metallicity
+        in units of ergs / s / cm^2 at 10 pc
+    ''' 
+
+    if not args.use_emline_flux:
+        return np.zeros(2), linespec[0:2,:,:]
+
+# loop through all emission line spectra for all ages, metallicities
+# WPBWPB: generalize such that does not assume only grid over ages and metallicities, but maybe ionization parameter (or arbitrary number of properties)
+# maybe I want to raise an error?
+    emlines, emwaves = args.emline_list_dict.keys(), args.emline_list_dict.values()
+    ssp_emline_collapsed = self.ssp_emline[0:len(emlines),:,:]
+    waves_collapsed = []
+    # loop through emission line spectra for all ages, metallicities
+    dims = linespec.shape
+    for i in range(dims[1]): # age array
+        # if no emission lines at this age, skip metallicity grid
+        if np.max(linespec[:,i,:]) <= 0:
+            empty = np.zeros( (len(emlines), dims[2]) )
+            ssp_emline_collapsed[:,i,:] = empty
+            continue
+        for j in range(dims[2]): # metallicity array
+            spec = linespec[:,i,j]
+            lineflux = []
+            for emline in emlines:
+                w = args.emline_list_dict[emline]
+                indx = np.searchsorted(linewave, w)
+                if spec[indx] <= 0:
+                    lineflux.append(0.)
+                    continue
+                # find indices when target line goes to zero
+                indx_zero = np.where(spec==0)[0]
+                indx_lo = indx - np.min( indx - indx_zero[indx_zero<indx])
+                indx_hi = indx + np.min( indx_zero[indx_zero>indx] - indx)
+                dnu = np.diff( clight / linewave[indx_lo:indx_hi+2])
+                y = spec[indx_lo:indx_hi+1]
+                # convert flux density in micro-Jy at 10 pc 
+                # to total flux at 10pc
+                lineflux.append(np.dot( y, np.abs(dnu) ) / 1e29)
+            ssp_emline_collapsed[:,i,j] = lineflux
+
+    # return modified emission line wavelength and SSP grid: 
+    # fluxes at discrete wavelengths
+    return np.array(emwaves), ssp_emline_collapsed
 
 
 def make_gaussian_emission(wavebig, wave, stddev=1., clight=2.99792e18):
@@ -329,7 +391,11 @@ WPBWPB: operate under assumption that spec, linespec are in same units
     spec = np.moveaxis(np.array(s), 0, 2)
     linespec = np.moveaxis(np.array(ls), 0, 2)
     metallicities = args.metallicity_dict[args.isochrone]
-    return ages, masses, wave, spec, np.array(metallicities), wave0, linespec
+
+    # Collapse the emission line SSP grid
+    linewave, linespec = collapse_emline_SSP(args, wave0, linespec) 
+
+    return ages, masses, wave, spec, np.array(metallicities), linewave,linespec
 
 
 class fsps_freeparams:

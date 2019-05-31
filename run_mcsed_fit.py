@@ -227,6 +227,18 @@ def parse_args(argv=None):
     # pass "count" keyword -- only used in test mode in parallel
     args.count = count
 
+    # Determine whether emission lines should be carried
+    # Collapses the emission line SSP grid to include only the desired lines
+    # and speeds up the CSP construction
+    if not args.add_nebular:
+        args.use_emline_flux = False
+    elif (args.emline_list_dict in [None, {}]):
+        args.use_emline_flux = False
+    elif (not args.test) & (not args.use_input_data):
+        args.use_emline_flux = False
+    else:
+        args.use_emline_flux = True
+
     return args
 
 
@@ -614,7 +626,7 @@ def main(argv=None, ssp_info=None):
 ## WPBWPB delete
 #    print('testing if boolean command line args default to True/False. this is add_nebular and fit_dust_emission:')
 #    print((args.add_nebular, args.fit_dust_em))
- 
+
     # Load Single Stellar Population model(s)
     if ssp_info is None:
 ## WPB delete: if carrying nebular separately from rest of spectrum...
@@ -653,19 +665,9 @@ def main(argv=None, ssp_info=None):
                         args.dust_law, args.dust_em, nwalkers=args.nwalkers,
                         nsteps=args.nsteps)
 
-    # Collapse the emission line SSP grid to include only the desired lines
-    # Speeds up the CSP construction
+    # Communicate emission line measurement preferences
+    mcsed_model.use_emline_flux = args.use_emline_flux
     mcsed_model.emline_dict = args.emline_list_dict
-    if (mcsed_model.emline_dict in [None, {}]):
-        mcsed_model.use_emline_flux = False
-    elif (not args.test) & (not args.use_input_data):
-        mcsed_model.use_emline_flux = False
-    else:
-        mcsed_model.use_emline_flux = True
-# WPBWPB delete
-        print('I"M READING THE LINE SSP STUFF')
-        mcsed_model.measure_emlineSSP_flux()
-
 
 ## WPBWPB delete
 #    return
@@ -789,14 +791,14 @@ def main(argv=None, ssp_info=None):
             mcsed_model.data_emline = emi
             mcsed_model.data_emline_e = emie
 
-# WPB delete
-            fwave = mcsed_model.get_filter_wavelengths()
-            print('these are filter wavelengths:')
-            print(np.sort(fwave))
-            dummy = mcsed_model.remove_waverange_filters(79560.,1e9,restframe=False)
-            fwave = mcsed_model.get_filter_wavelengths()
-            print(np.sort(fwave))
-            return
+## WPB delete
+#            fwave = mcsed_model.get_filter_wavelengths()
+#            print('these are filter wavelengths:')
+#            print(np.sort(fwave))
+#            dummy = mcsed_model.remove_waverange_filters(79560.,1e9,restframe=False)
+#            fwave = mcsed_model.get_filter_wavelengths()
+#            print(np.sort(fwave))
+#            return
 
             # Remove filters containing Lyman-alpha (and those blueward)
             mcsed_model.remove_waverange_filters(0., 1216., restframe=True)

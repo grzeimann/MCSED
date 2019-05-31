@@ -52,16 +52,13 @@ class Mcsed:
             single stellar population spectrum for each age in ssp_ages
             and each metallicity in ssp_met 
         emlinewave : numpy array (1 dim)
-            initially, unsmoothed wavelength grid for emission line SSP grid
-            modified to only include desired emission lines
-            (from emline_dict) 
+            Rest-frame wavelengths of requested emission lines (emline_dict)
+            Corresponds to ssp_emline
         ssp_emline : numpy array (3 dim)
-            emission line SSP grid spanning emlinewave, age, metallicity
-            only used for calculating model emission line strengths
-            initially, spans initial emlinewave grid with spectrum in 
-            units of microJy at 10 pc
-            modified to only include desired emission lines
-            (from emline_dict)            
+            Emission line SSP grid spanning emlinewave, age, metallicity
+            Only includes requested emission lines (from emline_dict)
+            Only used for calculating model emission line strengths
+            Spectral units are ergs / s / cm2 at 10 pc
         ssp_ages : numpy array (1 dim)
             ages of the SSP models
         ssp_masses : numpy array (1 dim)
@@ -307,12 +304,17 @@ WPBWPB units + are dimensions correct??
         self.SSP = np.dot(self.ssp_spectra, wei)
 # WPBWPB: this is where I would relax logU criteria, same as metallicity
 # careful: needs to be dealt with when measuring line fluxes originally
-        # only treat the emission line grid if it has nonzero elements
-        # (only need to check the youngest few ages)
-        if np.max(self.ssp_emline[:,0:10,:]) > 0:
+
+        # only treat the emission line grid if requested
+## WPBWPB delete
+#        print('shape of emline SSP before/after wei')
+#        print(self.ssp_emline.shape)
+        if self.use_emline_flux:
             self.lineSSP = np.dot(self.ssp_emline, wei)
         else:
             self.lineSSP = self.ssp_emline[:,:,0]
+## WPBWPB delete
+#        print(self.lineSSP.shape)
         return self.SSP, self.lineSSP
 
 # separate function for ssp_spectrum nebular, stellar
@@ -372,7 +374,7 @@ WPBWPB units??
             linespec_dustfree = np.dot(lineSSP, weight)
             mass = np.sum(weight * self.ssp_masses)
 
-        # Need to correct stellar spectrum for dust attenuation
+        # Need to correct spectrum for dust attenuation
         Alam = self.dust_abs_class.evaluate(self.wave)
         spec_dustobscured = spec_dustfree * 10**(-0.4 * Alam)
 
@@ -383,9 +385,13 @@ WPBWPB units??
 
         # recompute attenuation for the wavelength grid of emission lines 
         emwaves = self.emlinewave * (1. + self.redshift)
-        Alam_gas_emline = (self.dust_abs_class.evaluate(emwaves,new_wave=True)
-                          / self.dust_abs_class.EBV_stars_gas)
-        linespec_dustobscured = linespec_dustfree * 10**(-0.4*Alam_gas_emline)
+        Alam_emline = (self.dust_abs_class.evaluate(emwaves,new_wave=True)
+                       / self.dust_abs_class.EBV_stars_gas)
+## WPBWPB delete
+#        print(emwaves)
+#        print(Alam_emline)
+#        print('shape of linespec_dustfree, emwaves : (%s, %s)' % (linespec_dustfree.shape, emwaves.shape))
+        linespec_dustobscured = linespec_dustfree * 10**(-0.4*Alam_emline)
 # else, use a screen model
 
 # WPBWPB: do I need to change units of linespec? what are current units and what do I want?
@@ -433,53 +439,6 @@ WPBWPB units??
         else:
             return 0.0
 
-    def measure_emlineSSP_flux(self, clight=2.99792e18):
-        ''' Originally, emission line SSP grid contains all wavelengths
-        to speed up construction of emission line fluxes from the CSP,
-        reduce the emission line SSP grid to contain only the desired lines.
-
-        Converts SSP spectra to units of ergs / s / cm^2 at 10 pc
-        Modifies emission line wavelength grid to only contain desired lines
-        '''
-# WPBWPB modify - some better error catching / abort criteria?
-        if not self.use_emline_flux:
-            # If don't care about measuring emission lines, set as all zeros
-            self.ssp_emline = self.ssp_emline[0:2,:,:]
-            self.emlinewave = np.zeros(2)
-            return
-# loop through all emission line spectra for all ages, metallicities
-# WPBWPB: generalize such that does not assume only grid over ages and metallicities, but maybe ionization parameter (or arbitrary number of properties)
-# maybe I want to raise an error?
-        # loop through emission line spectra for all ages, metallicities
-        dims = self.ssp_emline.shape
-        for i in range(dims[1]): # age array
-            # if no emission lines at this age, skip metallicity grid
-            if np.max(self.ssp_emline[:,i,:]) <= 0:
-                empty = np.zeros( (len(self.emline_dict), dims[2]) )
-                self.ssp_emline[:,i,:] = empty
-                continue
-            for j in range(dims[2]): # metallicity array
-                spec = self.ssp_emline[:,i,j]
-                lineflux = []
-                for emline in self.emline_dict.keys():
-                    w = self.emline_dict[emline]
-                    indx = np.searchsorted(self.emlinewave, w)
-                    # find indices when target line goes to zero
-                    indx_zero = np.where(spec==0)[0]
-                    indx_lo = indx - np.min( indx - indx_zero[indx_zero<indx])
-                    indx_hi = indx + np.min( indx_zero[indx_zero>indx] - indx)
-                    dnu = np.diff( clight / self.emlinewave[indx_lo:indx_hi+2])
-                    y = spec[indx_lo:indx_hi+1]
-                    # convert flux density in micro-Jy at 10 pc 
-                    # to total flux at 10pc
-                    lineflux.append(np.dot( y, np.abs(dnu) ) / 1e29)
-                self.ssp_emline[:,i,j] = lineflux
-
-        # modify emission line wavelength grid: fluxes at discrete wavelengths
-        self.emlinewave = np.array(self.emline_dict.values())
-
-
-
     def lnlike(self):
         ''' Calculate the log likelihood and return the value and stellar mass
         of the model
@@ -496,8 +455,6 @@ WPBWPB units??
         emline_term = 0.0
         emline_weight = 1.
         if self.use_emline_flux:
-## WPBWPB remove
-#        if self.emline_dict not in [None, {}]:
             # if all lines have null line strengths, ignore 
             if not min(self.data_emline) == max(self.data_emline) == -99:
 ## WPBWPB delete
@@ -507,7 +464,6 @@ WPBWPB units??
 #                print(self.data_emline_e)
                 for emline in self.emline_dict.keys():
                     if self.data_emline['%s_FLUX' % emline] > -99: # null value
-# WPB: change s.t. argument is a rest-frame wavelength 
                         emline_wave = self.emline_dict[emline]
                         model_lineflux = self.linefluxCSPdict[emline] 
                         lineflux  = self.data_emline['%s_FLUX' % emline]

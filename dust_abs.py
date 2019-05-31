@@ -265,6 +265,127 @@ class noll:
         return Alam
 
 
+class noll_Eb_fixed:
+    ''' Prescription for dust law comes from Noll et al. (2009), with constants
+    defined in Kriek & Conroy (2013).  This dust attenuation law includes a
+    bump at 2175A and a modified Calzetti et al. (2000) attenuation curve.
+
+        A(wave) = frac{A_V}{R_V} (k'(wave) + D(wave))
+                     left(frac{wave}{5500}right) ^delta
+        D(wave) = frac{E_b (wave,dellam)^2 }{(wave^2-lam0^2)^2
+                     + (wave,dellam)^2}
+
+    In this variation, the dust bump is fixed at a particular value
+    '''
+    def __init__(self, EBV=0.15, delta=0.0, Eb=0., EBV_lims=[-0.05, 1.50],
+                 delta_lims=[-1., 1.], EBV_delta=0.02, delta_delta=0.3,
+                 Rv=4.05, EBV_stars_gas=0.44):
+        ''' Initialize Class
+
+        Parameters
+        -----
+        EBV : float
+            Color excess
+            The observed (B-V) color minus the intrinsic (B-V) color
+            Relates to Av, the magnitude of extinction in the V band (5500A) via
+                Av = Rv * EBV
+        delta : float
+            Power for powerlaw modification of Calzetti curve
+        Eb : float (held fixed throughout the fitting)
+            Strength of 2175A bump.  See equation above for the Drude profile,
+            D(wave)
+        Rv : float (held fixed throughout the fitting)
+            Extinction factor
+        EBV_stars_gas : float (held fixed throughout the fitting)
+            coefficient between the attenuation applied to the stars and gas
+            E(B-V)_stars = EBV_stars_gas * E(B-V)_gas
+        '''
+        self.EBV = EBV
+        self.delta = delta
+        self.Eb = Eb
+        self.EBV_lims = EBV_lims
+        self.delta_lims = delta_lims
+        self.EBV_delta = EBV_delta
+        self.delta_delta = delta_delta
+        self.nparams = 2
+        self.calz = None
+        self.Rv = Rv
+        self.EBV_stars_gas = EBV_stars_gas
+
+    def get_params(self):
+        ''' Return current parameters '''
+        return [self.EBV, self.delta]
+
+    def get_param_lims(self):
+        ''' Return current parameter limits '''
+        return [self.EBV_lims, self.delta_lims]
+
+    def get_param_deltas(self):
+        ''' Return current parameter deltas '''
+        return [self.EBV_delta, self.delta_delta]
+
+    def get_names(self):
+        ''' Return names of each parameter '''
+        return ['E(B-V)', '$\delta$']
+
+    def prior(self):
+        ''' Uniform prior based on boundaries '''
+        EBV_flag = (self.EBV > self.EBV_lims[0])*(self.EBV < self.EBV_lims[1])
+        delta_flag = ((self.delta > self.delta_lims[0]) *
+                      (self.delta < self.delta_lims[1]))
+        return EBV_flag * delta_flag
+
+    def set_parameters_from_list(self, input_list, start_value):
+        ''' Set parameters from a list and a start_value
+
+        Parameters
+        ----------
+        input_list : list
+            list of input parameters (could be much larger than number of
+            parameters to be set)
+        start_value : int
+            initial index from list to read out parameters
+        '''
+        self.EBV = input_list[start_value]
+        self.delta = input_list[start_value+1]
+
+    def plot(self, ax, wave, color=[0/255., 175/255., 202/255.], alpha=0.2):
+        ''' Plot Dust Law for given set of parameters '''
+        dust = self.evaluate(wave)
+        ax.plot(wave, dust, color=color, alpha=alpha)
+
+    def evaluate(self, wave, new_wave=False):
+        ''' Evaluate Dust Law
+
+        Parameters
+        ----------
+        wave : numpy array (1 dim)
+            wavelength
+        new_wave : bool
+            recompute k(wave), even if already present
+            only used in emission line strengths: finer wavelength grid
+
+        Returns
+        -------
+        Alam : numpy array (1 dim)
+            Effective optical depth as a function of wavelength
+        '''
+        dellam = 350.
+        lam0 = 2175.
+        if self.calz is None:
+            self.calz = calzettilaw(wave, self.Rv)
+        if new_wave:
+            kwave = calzettilaw(wave, self.Rv)
+        else:
+            kwave = self.calz
+
+        Dlam = (self.Eb * (wave*dellam)**2 /
+                          ((wave**2-lam0**2)**2+(wave*dellam)**2))
+        Alam = (self.EBV * (kwave+Dlam)*(wave/5500)**(self.delta))
+        return Alam
+
+
+
 class reddy:
     ''' 
     WPBWPB fill from mallory's description
