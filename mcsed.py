@@ -330,6 +330,8 @@ WPBWPB units + are dimensions correct??
         wei = np.exp(-(X)**2 / (2. * 0.15**2))
         wei /= wei.sum()
         self.SSP = np.dot(self.ssp_spectra, wei)
+# WPBWPB: this is where I would relax logU criteria, same as metallicity
+# careful: needs to be dealt with when measuring line fluxes originally
         # only treat the emission line grid if it has nonzero elements
         # (only need to check the youngest few ages)
         if np.max(self.ssp_emline[:,0:10,:]) > 0:
@@ -404,12 +406,12 @@ WPBWPB units??
 # modified by coefficient between EBV_stars ~ gas, get it here
         Alam_gas = Alam / self.dust_abs_class.EBV_stars_gas
 
-        # recompute attenuation for the finer wavelength grid of emission lines 
-        Alam_gas_emline = (self.dust_abs_class.evaluate(self.emlinewave,new_wave=True)
+        # recompute attenuation for the wavelength grid of emission lines 
+        emwaves = self.emlinewave * (1. + self.redshift)
+        Alam_gas_emline = (self.dust_abs_class.evaluate(emwaves,new_wave=True)
                           / self.dust_abs_class.EBV_stars_gas)
         linespec_dustobscured = linespec_dustfree * 10**(-0.4*Alam_gas_emline)
 # else, use a screen model
-# WPBWPB fix this, attenuate the nebular emission differently
 
 # WPBWPB: do I need to change units of linespec? what are current units and what do I want?
 
@@ -422,20 +424,24 @@ WPBWPB units??
         spec_dustobscured += L_bol * self.dust_em_class.evaluate(self.wave)
 
         # Redshift to observed frame
-# WPBWPB: am I sure I want to multiply the spectrum by 1+z? not divide?
         csp = np.interp(self.wave, self.wave * (1. + self.redshift),
                         spec_dustobscured * (1. + self.redshift))
 
-# WPBWPB: need to correct the line_csp somehow... just a distance term I think?
-# WPBWPB modify: getting the CSP also creates / modifies a dictionary of line strengths,
-# keys = same as in line dictionary, values = redshifted fluxes
-# emlineCSPdict
-
-        # WPBWPB comment:
-        line_csp = linespec_dustobscured.copy()
+        # Update dictionary of modeled emission line fluxes (observed)
+        linefluxCSPdict = {}
+        if self.use_emline_flux:
+            for emline in self.emline_dict.keys():
+                indx = np.argmin(np.abs(self.emlinewave 
+                                        - self.emline_dict[emline]))
+                flux = linespec_dustobscured[indx]
+                # Correct flux from 10pc to redshift of source
+                pc10cm = 10. * 3.08567758e18
+                Dlcm = self.Dl * pc10cm
+                linefluxCSPdict[emline] = linespec_dustobscured[indx] / Dlcm**2
+        self.linefluxCSPdict = linefluxCSPdict
 
         # Correct spectra from 10pc to redshift of the source
-        return csp / self.Dl**2, line_csp / self.Dl**2, mass
+        return csp / self.Dl**2, mass
 
     def lnprior(self):
         ''' Simple, uniform prior for input variables
@@ -479,7 +485,7 @@ WPBWPB units??
             for j in range(dims[2]): # metallicity array
                 spec = self.ssp_emline[:,i,j]
                 lineflux = []
-                for emline in self.emline_dict.keys()
+                for emline in self.emline_dict.keys():
                     w = self.emline_dict[emline]
                     indx = np.searchsorted(self.emlinewave, w)
                     # find indices when target line goes to zero
@@ -508,7 +514,7 @@ WPBWPB units??
             The log likelihood includes a chi2_term and a parameters term.
             The mass comes from building of the composite stellar population
         '''
-        self.spectrum, self.lineCSP, mass = self.build_csp()
+        self.spectrum, mass = self.build_csp()
 
         # compare input and model emission line fluxes
         emline_term = 0.0
@@ -527,7 +533,7 @@ WPBWPB units??
                     if self.data_emline['%s_FLUX' % emline] > -99: # null value
 # WPB: change s.t. argument is a rest-frame wavelength 
                         emline_wave = self.emline_dict[emline]
-                        model_lineflux = self.measure_emline_flux(wave0=emline_wave)
+                        model_lineflux = self.linefluxCSPdict[emline] 
                         lineflux  = self.data_emline['%s_FLUX' % emline]
                         elineflux = self.data_emline_e['%s_ERR' % emline]
                         emline_term += (-0.5 * (model_lineflux - lineflux)**2 /
@@ -680,7 +686,7 @@ WPBWPB units??
 
     def spectrum_plot(self, ax, color=[0.996, 0.702, 0.031], alpha=0.1):
         ''' Make spectum plot for current model '''
-        self.spectrum, self.lineCSP, mass = self.build_csp()
+        self.spectrum, mass = self.build_csp()
         ax.plot(self.wave, self.spectrum, color=color, alpha=alpha)
 
     def add_sfr_plot(self, ax1):

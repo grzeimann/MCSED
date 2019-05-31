@@ -529,7 +529,7 @@ WPBWPB: modify, document all outputs
     for theta, z in zip(thetas, zobs):
         mcsed_model.set_class_parameters(theta)
         mcsed_model.set_new_redshift(z)
-        mcsed_model.spectrum, mcsed_model.lineCSP, mass = mcsed_model.build_csp()
+        mcsed_model.spectrum, mass = mcsed_model.build_csp()
         # emission line fluxes
         if (args.emline_list_dict not in [None, {}]): 
             em_loc, emerr_loc = Table(), Table()
