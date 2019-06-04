@@ -240,7 +240,7 @@ WPBWPB units + are dimensions correct??
     def get_filter_fluxdensities(self):
         '''Convert a spectrum to photometric fluxes for a given filter set.
         The photometric fluxes will be in the same units as the spectrum.
-        The spectrum should be in microjanskies(lambda) such that
+        The spectrum is in microjanskies(lambda) such that
         the photometric fluxes will be in microjanskies.
 
         Returns
@@ -248,6 +248,9 @@ WPBWPB units + are dimensions correct??
         f_nu : numpy array (1 dim)
             Photometric flux densities for an input spectrum
         '''
+# WPBWPB delete
+        print('shape of spectrum, filter_matrix, filter_flag:')
+        print((self.spectrum.shape, self.filter_matrix.shape, self.filter_flag.shape))
         f_nu = np.dot(self.spectrum, self.filter_matrix[:, self.filter_flag])
         return f_nu
 
@@ -749,11 +752,17 @@ WPBWPB units??
     def add_spec_plot(self, ax3):
 # WPBWPB: adjust wavelength range, depending on whether dust emission is fit
         ax3.set_xscale('log')
-        xtick_pos = [3000, 5000, 10000, 20000, 40000]
-        xtick_lbl = ['0.3', '0.5', '1', '2', '4']
+        if self.dust_em_class.fixed:
+            xtick_pos = [3000, 5000, 10000, 20000, 40000]
+            xtick_lbl = ['0.3', '0.5', '1', '2', '4']
+            xlims = [3000, 50000]
+        else:
+            xtick_pos = [3000, 5000, 10000, 40000, 100000, 1000000]
+            xtick_lbl = ['0.3', '0.5', '1', '4', '10', '100']
+            xlims = [3000, 2000000]
         ax3.set_xticks(xtick_pos)
         ax3.set_xticklabels(xtick_lbl)
-        ax3.set_xlim([3000, 50000])
+        ax3.set_xlim(xlims)
         ax3.set_xlabel(r'Wavelength $\mu m$')
         ax3.set_ylabel(r'$F_{\nu}$ ($\mu$Jy)')
 

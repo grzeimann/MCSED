@@ -10,8 +10,8 @@ ssp = 'fsps'  # options include: 'fsps'
 isochrone = 'padova'  # options include: 'padova'
 # SFH options include: 'constant', 'burst', 'polynomial', 'exponential', 
 #                      'double_powerlaw', 'empirical_direct', 'empirical',
-sfh = 'constant'
-dust_law = 'calzetti'  # options include: 'noll', 'calzetti'
+sfh = 'empirical_direct'
+dust_law = 'noll'  # options include: 'noll', 'calzetti'
 dust_em = 'DL07'  # options include: 'DL07'
 
 # Dust attenuation law parameters
@@ -25,12 +25,12 @@ EBV_stars_gas = -1
 # If True, fit the dust emission component. 
 # If False, remove all filters redward of rest-frame wave_dust_em microns 
 # and fix dust emission parameters to umin=2.0, gamma=0.05, qpah=2.5 
-fit_dust_em = False
+fit_dust_em = False #True # False
 wave_dust_em = 2.5 # rest-frame wavelength in microns 
 
 # EMCEE parameters
-nwalkers = 10 # 100
-nsteps = 100 # 1000
+nwalkers = 100 # 100
+nsteps = 1000 # 1000
 
 # Number of test objects
 nobjects = 5

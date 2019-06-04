@@ -399,8 +399,8 @@ WPBWPB: operate under assumption that spec, linespec are in same units
     # Collapse the emission line SSP grid
     linewave, linespec = collapse_emline_SSP(args, wave0, linespec) 
 
-# WPB delete
-    print('these are ages: %s' % ages)
+## WPB delete
+#    print('these are ages: %s' % ages)
 
     return ages, masses, wave, spec, np.array(metallicities), linewave,linespec
 

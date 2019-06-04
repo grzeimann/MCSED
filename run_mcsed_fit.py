@@ -205,6 +205,7 @@ def parse_args(argv=None):
 #    args.fit_dust_em = str2bool(str(args.fit_dust_em), args.log)
 #WPBWPB delete
 #    print(args.fit_dust_em)
+#    print(type(args.fit_dust_em))
 #    print(args.add_nebular)
 
     # Set metallicity as free or fixed parameter
@@ -611,6 +612,7 @@ def main(argv=None, ssp_info=None):
 #        print('just now starting parallel mode from within series function')
 #        print('this is argv from *fit.py.main():')
 #        print(argv)
+
         import run_mcsed_parallel
         run_mcsed_parallel.main_parallel(argv=argv)
         return   
@@ -702,6 +704,8 @@ def main(argv=None, ssp_info=None):
 
     if not args.fit_dust_em:
         mcsed_model.dust_em_class.fixed = True
+    else:
+        mcsed_model.dust_em_class.fixed = False
 
     # Build names for parameters and labels for table
     names = mcsed_model.get_param_names()
