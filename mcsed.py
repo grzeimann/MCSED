@@ -248,9 +248,9 @@ WPBWPB units + are dimensions correct??
         f_nu : numpy array (1 dim)
             Photometric flux densities for an input spectrum
         '''
-# WPBWPB delete
-        print('shape of spectrum, filter_matrix, filter_flag:')
-        print((self.spectrum.shape, self.filter_matrix.shape, self.filter_flag.shape))
+## WPBWPB delete
+#        print('shape of spectrum, filter_matrix, filter_flag:')
+#        print((self.spectrum.shape, self.filter_matrix.shape, self.filter_flag.shape))
         f_nu = np.dot(self.spectrum, self.filter_matrix[:, self.filter_flag])
         return f_nu
 

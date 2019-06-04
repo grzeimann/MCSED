@@ -10,8 +10,8 @@ ssp = 'fsps'  # options include: 'fsps'
 isochrone = 'padova'  # options include: 'padova'
 # SFH options include: 'constant', 'burst', 'polynomial', 'exponential', 
 #                      'double_powerlaw', 'empirical_direct', 'empirical',
-sfh = 'empirical_direct'
-dust_law = 'noll'  # options include: 'noll', 'calzetti'
+sfh = 'constant'
+dust_law = 'calzetti'  # options include: 'noll', 'calzetti'
 dust_em = 'DL07'  # options include: 'DL07'
 
 # Dust attenuation law parameters
@@ -41,11 +41,10 @@ add_nebular = True
 logU = -2.
 
 # Error floor under which we don't trust the error estimates 
-# minimum photometric error (fractional uncertainty in units of specific flux)
+# minimum photometric error (fractional uncertainty in specific flux)
 phot_floor_error = 0.10 
-# minimum emission line error (absolute uncertainty in units of ergs / s / cm2)
-# WPB: NOTE: currently only used in test mode -- modify when reading in user data
-emline_floor_error = 0.65e-17
+# minimum emission line error (fractional uncertainty in line flux)
+emline_floor_error = 0.10 
 
 # Use input photometry and emission lines
 # If True, use data provided in the input file
@@ -91,6 +90,7 @@ output_dict = {'parameters'    : True,
                'triangle plot' : True,
                'sample plot'   : True,
                'image format'  : 'png'}
+# WPBWPB: combine photfluxes into single file, also add emline flux comparison
 
 # percentiles of each parameter to report in the output file
 param_percentiles = [5, 16, 50, 84, 95]
