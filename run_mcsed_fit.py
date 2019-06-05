@@ -215,6 +215,7 @@ def parse_args(argv=None):
             args.metallicity = float(args.metallicity)
     except ValueError:
         args.metallicity = str2bool(str(args.metallicity),args.log)
+        print((args.metallicity, type(args.metallicity)))
         if args.metallicity:
             print("Fixing metallicity at z = 0.0077")
             args.metallicity = 0.0077
@@ -726,6 +727,8 @@ def main(argv=None, ssp_info=None):
     if args.metallicity:
         mcsed_model.ssp_class.fix_met = True
         mcsed_model.ssp_class.met = args.metallicity
+    else:
+        mcsed_model.ssp_class.fix_met = False
 
     if not args.fit_dust_em:
         mcsed_model.dust_em_class.fixed = True
@@ -818,10 +821,15 @@ def main(argv=None, ssp_info=None):
         mcsed_model.emline_dict = args.emline_list_dict
 
         iv = mcsed_model.get_params()
+# WPBWPB delete
+        print(iv)
+        #return
         for yi, ye, zi, fl, oi, fd, emi, emie in zip(y, yerr, z, flag, objid,
                                                    field, em, emerr):
             mcsed_model.filter_flag = fl
             mcsed_model.set_class_parameters(iv)
+# WPBWPB delete
+            return
             mcsed_model.data_fnu = yi[fl]
             mcsed_model.data_fnu_e = ye[fl]
             mcsed_model.set_new_redshift(zi)

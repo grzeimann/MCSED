@@ -72,7 +72,7 @@ class Mcsed:
         sfh_class : str
             Converted from str to class in initialization
             This is the input class for sfh.  Each class has a common attribute
-            which is "sfh_class.nparams" for organizing the total model_params.
+            which is "sfh_class.get_nparams()" for organizing the total model_params.
             Also, each class has a key function, sfh_class.evaluate(t), with
             the input of time in units of Gyrs
         dust_abs_class : str 
@@ -270,23 +270,27 @@ WPBWPB units + are dimensions correct??
         # STAR FORMATION HISTORY
         self.sfh_class.set_parameters_from_list(theta, start_value)
         # Keeping track of theta index for age of model and other classes
-        start_value += self.sfh_class.nparams
+        start_value += self.sfh_class.get_nparams()
 
         ######################################################################
         # DUST ATTENUATION
         self.dust_abs_class.set_parameters_from_list(theta, start_value)
-        start_value += self.dust_abs_class.nparams
+        start_value += self.dust_abs_class.get_nparams()
 # WPBWPB modify: pass a dust_abs_birthcloud keyword, see if its the same, blah
 
         ######################################################################
         # SSP Parameters
+# WPBWPB delete
+        print(start_value)
+        print(self.ssp_class.fix_met)
         self.ssp_class.set_parameters_from_list(theta, start_value)
-        start_value += self.ssp_class.nparams
-
+        start_value += self.ssp_class.get_nparams()
+# WPBWPB delete
+        print(start_value)
         ######################################################################
         # DUST EMISSION
         self.dust_em_class.set_parameters_from_list(theta, start_value)
-        start_value += self.dust_em_class.nparams
+        start_value += self.dust_em_class.get_nparams()
 
     def get_ssp_spectrum(self):
         '''
@@ -651,6 +655,9 @@ WPBWPB units??
         vals = []
         for par_cl in self.param_classes:
             vals.append(getattr(self, par_cl).get_params())
+## WPBWPB delete
+#            print(par_cl)
+#            print(vals)
         vals = list(np.hstack(vals))
         return vals
 
@@ -836,6 +843,7 @@ WPBWPB units??
         chi2sel = (self.samples[:, -1] >
                    (np.max(self.samples[:, -1], axis=0) - lnprobcut))
         nsamples = self.samples[chi2sel, :]
+# WPBWPB: understand this line....
         o = 0  # self.sfh_class.nparams
         names = self.get_param_names()[o:]
         names.append('Log Mass')

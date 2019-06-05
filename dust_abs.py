@@ -65,10 +65,13 @@ class calzetti:
         self.EBV = EBV
         self.EBV_lims = EBV_lims
         self.EBV_delta = EBV_delta
-        self.nparams = 1
         self.calz = None
         self.Rv = Rv
         self.EBV_stars_gas = EBV_stars_gas
+
+    def get_nparams(self):
+        ''' Return number of parameters '''
+        return 1
 
     def get_params(self):
         ''' Return current parameters '''
@@ -182,11 +185,13 @@ class noll:
         self.EBV_delta = EBV_delta
         self.delta_delta = delta_delta
         self.Eb_delta = Eb_delta
-        self.nparams = 3
         self.calz = None
         self.Rv = Rv
         self.EBV_stars_gas = EBV_stars_gas
 
+    def get_nparams(self):
+        ''' Return number of parameters '''
+        return 3
 
     def get_params(self):
         ''' Return current parameters '''
@@ -307,10 +312,13 @@ class noll_Eb_fixed:
         self.delta_lims = delta_lims
         self.EBV_delta = EBV_delta
         self.delta_delta = delta_delta
-        self.nparams = 2
         self.calz = None
         self.Rv = Rv
         self.EBV_stars_gas = EBV_stars_gas
+
+    def get_nparams(self):
+        ''' Return number of parameters '''
+        return 2
 
     def get_params(self):
         ''' Return current parameters '''
@@ -410,10 +418,13 @@ class reddy:
         self.EBV = EBV
         self.EBV_lims = EBV_lims
         self.EBV_delta = EBV_delta
-        self.nparams = 1
         self.klam = None
         self.Rv = Rv
         self.EBV_stars_gas = EBV_stars_gas
+
+    def get_nparams(self):
+        ''' Return number of parameters '''
+        return 1
 
     def get_params(self):
         ''' Return current parameters '''

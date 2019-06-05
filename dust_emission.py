@@ -35,10 +35,6 @@ class DL07:
         self.gamma_delta = gamma_delta
         self.qpah_delta = qpah_delta
         self.fixed = fixed
-        if self.fixed:
-            self.nparams = 0
-        else:
-            self.nparams = 3
         self.get_dust_emission_matrix()
 
     def get_dust_emission_matrix(self):
@@ -66,6 +62,12 @@ class DL07:
         self.interpumax = LinearNDInterpolator(X, DE2.reshape(shape[0] *
                                                               shape[1],
                                                               shape[2]))
+    def get_nparams(self):
+        ''' Return number of parameters '''
+        if self.fixed:
+            return 0
+        else:
+            return 3 
 
     def get_params(self):
         ''' Return current parameters '''

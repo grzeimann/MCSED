@@ -450,13 +450,16 @@ class fsps_freeparams:
         TODO Fill these in
         '''
         self.met = met
-        if fix_met:
-            self.nparams = 0
-        else:
-            self.nparams = 1
         self.met_lims = met_lims
         self.met_delta = met_delta
         self.fix_met = fix_met
+
+    def get_nparams(self):
+        ''' Return number of parameters '''
+        if self.fix_met:
+            return 0
+        else:
+            return 1
 
     def get_params(self):
         ''' Return current parameters '''

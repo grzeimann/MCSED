@@ -42,13 +42,16 @@ class constant:
         self.age_lims = age_lims
         self.logsfr_delta = logsfr_delta
         self.age_delta = age_delta
-        self.nparams = 2
 
     def set_agelim(self, redshift):
         ''' Set the Age limit based on age of the universe '''
         C = Cosmology()
         self.age_lims[1] = np.log10(C.lookback_time(20.) -
                                     C.lookback_time(redshift))
+
+    def get_nparams(self):
+        ''' Return number of parameters '''
+        return 2
 
     def get_params(self):
         ''' Return current parameters '''
@@ -149,13 +152,16 @@ class burst:
         self.burst_age_delta = burst_age_delta
         self.burst_sigma_delta = burst_sigma_delta
         self.burst_strength_delta = burst_strength_delta
-        self.nparams = 4
 
     def set_agelim(self, redshift):
         ''' Set the Age limit based on age of the universe '''
         C = Cosmology()
         self.age_lims[1] = np.log10(C.lookback_time(20.) -
                                     C.lookback_time(redshift))
+
+    def get_nparams(self):
+        ''' Return number of parameters '''
+        return 4
 
     def get_params(self):
         ''' Return current parameters '''
@@ -271,7 +277,6 @@ class polynomial:
         self.age = age
         self.age_lims = age_lims
         self.age_delta = age_delta
-        self.nparams = len(age_locs) #+1
 
     def set_agelim(self, redshift):
         ''' Set the Age limit based on age of the universe '''
@@ -279,6 +284,11 @@ class polynomial:
         self.age_lims[1] = np.log10(C.lookback_time(20.) -
                                     C.lookback_time(redshift))
         self.age = self.age_lims[1]*1.
+
+    def get_nparams(self):
+        ''' Return number of parameters '''
+        return len(self.age_locs) #+1
+
     def get_params(self):
         ''' Return current parameters '''
         p = []
@@ -396,7 +406,6 @@ WPB REWRITE PARAMETERS
         self.tau = tau
         self.tau_lims = tau_lims
         self.tau_delta = tau_delta
-        self.nparams = 3
         self.sign = sign
 
     def set_agelim(self, redshift):
@@ -404,6 +413,10 @@ WPB REWRITE PARAMETERS
         C = Cosmology()
         self.age_lims[1] = np.log10(C.lookback_time(20.) -
                                     C.lookback_time(redshift))
+
+    def get_nparams(self):
+        ''' Return number of parameters '''
+        return 3
 
     def get_params(self):
         ''' Return current parameters '''
@@ -526,13 +539,16 @@ WPBWPB add: _delta for remaining parameters
         self.c_delta = c_delta
         self.age_delta = age_delta
         self.age_lims = age_lims
-        self.nparams = 5
 
     def set_agelim(self, redshift):
         ''' Set the Age limit based on age of the universe '''
         C = Cosmology()
         self.age_lims[1] = np.log10(C.lookback_time(20.) -
                                     C.lookback_time(redshift))
+
+    def get_nparams(self):
+        ''' Return number of parameters '''
+        return 5
 
     def get_params(self):
         ''' Return current parameters '''
@@ -615,8 +631,7 @@ class empirical_direct:
         TODO Fill these in
         '''
         self.ages = ages
-        self.nparams = len(self.ages)
-        self.nums = np.arange(1, self.nparams+1, dtype=int)
+        self.nums = np.arange(1, self.get_nparams()+1, dtype=int)
         for num in self.nums:
             setattr(self, 'sfr_' + str(num), init_log_sfr - num**1.2 * 0.3)
             setattr(self, 'sfr_' + str(num) + '_lims', init_log_sfr_lims)
@@ -631,6 +646,10 @@ class empirical_direct:
         C = Cosmology()
         self.age = np.log10(C.lookback_time(20.) -
                             C.lookback_time(redshift))
+
+    def get_nparams(self):
+        ''' Return number of parameters '''
+        return len(self.ages)
 
     def get_params(self):
         ''' Return current parameters '''
@@ -714,8 +733,7 @@ class empirical:
         TODO Fill these in
         '''
         self.ages = ages
-        self.nparams = len(self.ages)
-        self.nums = np.arange(1, self.nparams, dtype=int)
+        self.nums = np.arange(1, self.get_nparams(), dtype=int)
         self.mass = mass
         self.mass_lims = mass_lims
         self.mass_delta = mass_delta
@@ -742,6 +760,10 @@ class empirical:
         self.age = np.log10(C.lookback_time(20.) - C.lookback_time(redshift))
         self.tdiff = np.diff(10**np.vstack([[0.] + self.ages,
                              [self.age+9.]*(len(self.ages)+1)]).min(axis=0))
+
+    def get_nparams(self):
+        ''' Return number of parameters '''
+        return len(self.ages)
 
     def get_params(self):
         ''' Return current parameters '''
