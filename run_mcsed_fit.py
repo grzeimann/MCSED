@@ -734,6 +734,7 @@ def main(argv=None, ssp_info=None):
         mcsed_model.dust_em_class.fixed = True
     else:
         mcsed_model.dust_em_class.fixed = False
+# WPBWPB: maybe make more concise -- mcsed_model.dust_em_class.fixed = not args.fit_dust_em
 
     # Build names for parameters and labels for table
     names = mcsed_model.get_param_names()
@@ -822,14 +823,14 @@ def main(argv=None, ssp_info=None):
 
         iv = mcsed_model.get_params()
 # WPBWPB delete
-        print(iv)
+#        print(iv)
         #return
         for yi, ye, zi, fl, oi, fd, emi, emie in zip(y, yerr, z, flag, objid,
                                                    field, em, emerr):
             mcsed_model.filter_flag = fl
             mcsed_model.set_class_parameters(iv)
 # WPBWPB delete
-            return
+#            return
             mcsed_model.data_fnu = yi[fl]
             mcsed_model.data_fnu_e = ye[fl]
             mcsed_model.set_new_redshift(zi)
