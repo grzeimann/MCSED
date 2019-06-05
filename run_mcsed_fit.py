@@ -266,28 +266,45 @@ def build_filter_matrix(args, wave):
         As mentioned above, the Fil_matrix has rows of wavelength and
         columns for each filter in args.filt_dict/config.filt_dict
     '''
-# WPBWPB: either build from scratch each time, or check whether same dimensions
-# only takes <0.5 sec to build -- might take longer just to load the thing
-    if op.exists(args.filter_matrix_name):
-        return np.loadtxt(args.filter_matrix_name)
-    else:
-# WPBWPB -- could remove
-        start_time = time.time()
-        nfilters = len(args.filt_dict)
-        Fil_matrix = np.zeros((len(wave), nfilters))
-        for i in np.arange(nfilters):
-            wv, through = np.loadtxt(op.join('FILTERS', args.filt_dict[i]),
-                                     unpack=True)
-            new_through = np.interp(wave, wv, through, 0.0, 0.0)
-            S = np.sum(new_through)
-            if S == 0.:
-                S = 1.
-            Fil_matrix[:, i] = new_through / S
-        np.savetxt(args.filter_matrix_name, Fil_matrix)
+## WPBWPB: either build from scratch each time, or check whether same dimensions
+## only takes <0.5 sec to build -- might take longer just to load the thing
+#    if op.exists(args.filter_matrix_name):
+#        return np.loadtxt(args.filter_matrix_name)
+#    else:
+## WPBWPB -- could remove
+#        start_time = time.time()
+#        nfilters = len(args.filt_dict)
+#        Fil_matrix = np.zeros((len(wave), nfilters))
+#        for i in np.arange(nfilters):
+#            wv, through = np.loadtxt(op.join('FILTERS', args.filt_dict[i]),
+#                                     unpack=True)
+#            new_through = np.interp(wave, wv, through, 0.0, 0.0)
+#            S = np.sum(new_through)
+#            if S == 0.:
+#                S = 1.
+#            Fil_matrix[:, i] = new_through / S
+#        np.savetxt(args.filter_matrix_name, Fil_matrix)
+## WPBWPB -- could remove 
+#        ellapsed_time = time.time() - start_time
+#        print('Time to build filter matrix: %s sec' % ellapsed_time)
+#        return Fil_matrix
+
+    start_time = time.time()
+    nfilters = len(args.filt_dict)
+    Fil_matrix = np.zeros((len(wave), nfilters))
+    for i in np.arange(nfilters):
+        wv, through = np.loadtxt(op.join('FILTERS', args.filt_dict[i]),
+                                 unpack=True)
+        new_through = np.interp(wave, wv, through, 0.0, 0.0)
+        S = np.sum(new_through)
+        if S == 0.:
+            S = 1.
+        Fil_matrix[:, i] = new_through / S
+#     np.savetxt(args.filter_matrix_name, Fil_matrix)
 # WPBWPB -- could remove 
-        ellapsed_time = time.time() - start_time
-        print('Time to build filter matrix: %s sec' % ellapsed_time)
-        return Fil_matrix
+    ellapsed_time = time.time() - start_time
+    print('Time to build filter matrix: %s sec' % ellapsed_time)
+    return Fil_matrix
 
 
 def get_test_filters(args):
@@ -372,29 +389,112 @@ def read_input_file(args):
     # WPB: check if ID is of form skelton: if yes, grab from catalogs
     # else, check input units and convert appropriately
     F = Table.read(args.filename, format='ascii')
+
+    # keep track of which columns from the input file are utilized
+    Fcols = F.colnames
+## WPBWPB delete
+#    print('this is Fcols:   '+str(Fcols))
+
     nobj = len(F['field'])
+
+    # redshift array
+    z = F['z']
+    Fcols.remove('z')
+
+    # Skelton catalogs
     fields = ['aegis', 'cosmos', 'goodsn', 'goodss', 'uds']
     name_base = '_3dhst.v4.1.cat.FITS'
     field_dict = {}
     for field in fields:
         field_dict[field] = fits.open(op.join('3dhst_catalogs',
                                               field+name_base))[1]
+
+    # check whether any additional photometry is provided by the user
+    # WPBWPB: need to adjust if change naming convention of emission lines
+    input_filters = [col.split('_')[1] for col in Fcols if (len(col)>1) & (col[0:2]=='f_')]
+    infilt_dict = {}
+    for fname in input_filters:
+        if op.exists('FILTERS/%s.res' % fname):
+            if '%s.res' % fname not in args.filt_dict.values():
+                findex = max(args.filt_dict.keys())+1
+                infilt_dict[ findex ] = '%s.res' % fname
+                Fcols = [c for c in Fcols if c not in ['f_'+fname, 'e_'+fname]]
+
+
+# WPBWPB: remove from Fcols now, or when actually reading in the data?
+# WPBWPB: some check on the filter curve to make sure it is formatted correctly?
+# WPBWPB: raise an error instead of printing a statement?
+        else:
+            print('*CAUTION* %s.res filter curve does not exist:' % fname)
+
+    # update master filter curve dictionary with user filters
+    args.filt_dict.update(infilt_dict)
+
+# APPEND TO FILT_DICT
     nfilters = len(args.filt_dict)
     y = np.zeros((nobj, nfilters))
     yerr = np.zeros((nobj, nfilters))
     flag = np.zeros((nobj, nfilters), dtype=bool)
 
-    # keep track of which columns from the input file are utilized
-    Fcols = list(F.colnames)
-## WPBWPB delete
-#    print('this is Fcols:   '+str(Fcols))
-
-    # redshift array
-    z = F['z']
-    Fcols.remove('z')
-
     # convert from mag_zp = 25 to microjanskies (mag_zp = 23.9)
     fac = 10**(-0.4*(25.0-23.9))
+    phot_fill_value = -99 # null value, should not be changed
+
+    # assemble photometry
+    for i, datum in enumerate(F):
+        # WPB delete - assumes first element is field name
+        loc = datum[0].lower()
+
+        # WPB delete - loop through all filters, setting flags and fluxes appropriately
+        for j, ind in enumerate(args.filt_dict.keys()):
+            ### determine if column is present in catalog or user input file
+            # WPB delete - check if present in Skelton catalog
+            if ind in args.catalog_filter_dict[loc].keys():
+                colname  = "f_"+args.catalog_filter_dict[loc][ind]
+                ecolname = "e_"+args.catalog_filter_dict[loc][ind]
+            # WPB delete - if not, check if present in input file
+            elif ind in infilt_dict.keys():
+                colname  = "f_"+infilt_dict[ind].split('.res')[0]
+                ecolname = "e_"+infilt_dict[ind].split('.res')[0]
+            # WPB delete - if neither, set to zero and move on
+            else:
+                y[i, j] = 0.0
+                yerr[i, j] = 0.0
+                flag[i, j] = False
+                continue
+            ### grab flux and error, if available:
+            # WPB delete - check if present in Skelton catalog
+            if colname in field_dict[loc].columns.names:
+                # WPB delete: assume second element (i=1) is the Skelton ID
+                # fi, fie are the flux and error (resp) for given filter and object
+                fi  = field_dict[loc].data[colname][int(datum[1])-1]
+                fie = field_dict[loc].data[ecolname][int(datum[1])-1]
+            # WPB delete - if not, must be present in input file
+            elif colname in F.colnames:
+                fi  = datum[colname]
+                fie = datum[ecolname]
+            else:
+                y[i, j] = 0.0
+                yerr[i, j] = 0.0
+                flag[i, j] = False
+                continue
+                # WPB delete - if null value, flux density is zero
+            if (fi > phot_fill_value):
+                y[i, j] = fi*fac
+                flag[i, j] = True
+                # use a floor error if necessary
+                # WPBWPB note: I don't think this condition is ever met...
+                if fi != 0:
+                    yerr[i, j] = np.abs(np.max([args.phot_floor_error,
+                                        np.abs(fie/fi)]) * fi * fac)
+                else:
+                    yerr[i, j] = 0.0
+                    flag[i, j] = False
+            else:
+                y[i, j] = 0.0
+                yerr[i, j] = 0.0
+                flag[i, j] = False
+
 
     # read in emission line fluxes, if provided
     emline_fill_value = -99 # null value, should not be changed
@@ -404,7 +504,7 @@ def read_input_file(args):
             colname, ecolname = '%s_FLUX' % emline, '%s_ERR' % emline
             if colname in Fcols:
                 em_arr = np.array(F[colname]  * args.emline_factor)
-                emerr_arr = np.max([F[ecolname], 
+                emerr_arr = np.max([F[ecolname],
                                     args.emline_floor_error*F[colname]],0)
                 emerr_arr *= args.emline_factor
 
@@ -413,14 +513,14 @@ def read_input_file(args):
                 em_arr[null_idx] = emline_fill_value
                 emerr_arr[null_idx] = emline_fill_value
 
-                em[colname]     = em_arr 
-                emerr[ecolname] = emerr_arr 
+                em[colname]     = em_arr
+                emerr[ecolname] = emerr_arr
 
                 Fcols = [c for c in Fcols if c not in [colname, ecolname]]
                 print('Reading %s line fluxes from input file' % emline)
 ## WPBWPB delete
 #                print('this is Fcols:   '+str(Fcols))
-            else: 
+            else:
 ## WPBWPB make a decision: all fill values, or remove from dictionary?
 #                em[colname]     = np.full(len(F), emline_fill_value)
 #                emerr[ecolname] = np.full(len(F), emline_fill_value)
@@ -429,38 +529,6 @@ def read_input_file(args):
         em    = np.full((len(F),2), emline_fill_value)
         emerr = np.full((len(F),2), emline_fill_value)
 
-    for i, datum in enumerate(F):
-        loc = datum[0].lower()
-        for j, ind in enumerate(args.filt_dict.keys()):
-            if ind in args.catalog_filter_dict[loc].keys():
-                colname = "f_"+args.catalog_filter_dict[loc][ind]
-                ecolname = "e_"+args.catalog_filter_dict[loc][ind]
-            else:
-                y[i, j] = 0.0
-                yerr[i, j] = 0.0
-                flag[i, j] = False
-                continue
-            if colname in field_dict[loc].columns.names:
-                fi = field_dict[loc].data[colname][int(datum[1])-1]
-                fie = field_dict[loc].data[ecolname][int(datum[1])-1]
-                if (fi > -99.):
-                    y[i, j] = fi*fac
-                    # use a floor error if necessary
-                    if fi != 0:
-                        yerr[i, j] = np.abs(np.max([args.phot_floor_error,
-                                            np.abs(fie/fi)]) * fi * fac)
-                    else:
-                        yerr[i, j] = 0.0
-                        flag[i, j] = False
-                    flag[i, j] = True
-                else:
-                    y[i, j] = 0.0
-                    yerr[i, j] = 0.0
-                    flag[i, j] = False
-            else:
-                y[i, j] = 0.0
-                yerr[i, j] = 0.0
-                flag[i, j] = False
 
     # warn of any unused columns from the input file
     if (Fcols!=[]) & (args.use_input_data):
@@ -555,8 +623,8 @@ WPBWPB: modify, document all outputs
     for theta, z in zip(thetas, zobs):
         mcsed_model.set_class_parameters(theta)
         mcsed_model.set_new_redshift(z)
-# WPBWPB delete
-        print('this is the redshift: z')
+## WPBWPB delete
+#        print('this is the redshift: z')
         mcsed_model.spectrum, mass = mcsed_model.build_csp()
         # simulate emission line fluxes
         # true modeled fluxes are stored in mcsed_model.linefluxCSPdict
@@ -576,11 +644,11 @@ WPBWPB: modify, document all outputs
 #                print(perturb) 
                 em_loc[colname] = [model_lineflux 
                                 + float(emerr_loc[ecolname]*np.random.randn(1))]
-# WPBWPB delete
-            print('these are the true and modeled line fluxes and errors:')
-            print(mcsed_model.linefluxCSPdict.values())
-            print(em_loc)
-            print(emerr_loc)
+## WPBWPB delete
+#            print('these are the true and modeled line fluxes and errors:')
+#            print(mcsed_model.linefluxCSPdict.values())
+#            print(em_loc)
+#            print(emerr_loc)
             em = vstack([em, em_loc])
             emerr = vstack([emerr, emerr_loc])
 ## WPBWPB adjust log info.....
