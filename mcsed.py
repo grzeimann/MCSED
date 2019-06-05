@@ -92,7 +92,8 @@ WPBWPB units + are dimensions correct??
             Emission line errors in units ergs / cm2 / s
         emline_dict : dictionary
             Keys are emission line names (str)
-            Values are rest-frame wavelength in Angstroms (float)
+            Values are a two-element tuple:
+                (rest-frame wavelength in Angstroms (float), weight (float))
         use_emline_flux : bool
             If emline_dict contains emission lines, set to True. Else, False
         redshift : float
@@ -502,18 +503,20 @@ WPBWPB units??
         csp = np.interp(self.wave, self.wave * (1. + self.redshift),
                         spec_dustobscured * (1. + self.redshift))
 
-        # Update dictionary of modeled emission line fluxes (observed)
+        # Update dictionary of modeled emission line fluxes
         linefluxCSPdict = {}
         if self.use_emline_flux:
             for emline in self.emline_dict.keys():
                 indx = np.argmin(np.abs(self.emlinewave 
-                                        - self.emline_dict[emline]))
+                                        - self.emline_dict[emline][0]))
+                # flux is given in ergs / s / cm2 at 10 pc
                 flux = linespec_dustobscured[indx]
                 # Correct flux from 10pc to redshift of source
-                pc10cm = 10. * 3.08567758e18
-                Dlcm = self.Dl * pc10cm
-                linefluxCSPdict[emline] = linespec_dustobscured[indx] / Dlcm**2
+                linefluxCSPdict[emline] = linespec_dustobscured[indx] / self.Dl**2
         self.linefluxCSPdict = linefluxCSPdict
+
+## WPBWPB delete
+#        print( linefluxCSPdict )
 
         # Correct spectra from 10pc to redshift of the source
         return csp / self.Dl**2, mass
@@ -547,7 +550,6 @@ WPBWPB units??
 
         # compare input and model emission line fluxes
         emline_term = 0.0
-        emline_weight = 1.
         if self.use_emline_flux:
             # if all lines have null line strengths, ignore 
             if not min(self.data_emline) == max(self.data_emline) == -99:
@@ -558,7 +560,7 @@ WPBWPB units??
 #                print(self.data_emline_e)
                 for emline in self.emline_dict.keys():
                     if self.data_emline['%s_FLUX' % emline] > -99: # null value
-                        emline_wave = self.emline_dict[emline]
+                        emline_wave, emline_weight = self.emline_dict[emline]
                         model_lineflux = self.linefluxCSPdict[emline] 
                         lineflux  = self.data_emline['%s_FLUX' % emline]
                         elineflux = self.data_emline_e['%s_ERR' % emline]

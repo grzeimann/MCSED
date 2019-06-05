@@ -52,7 +52,9 @@ emline_floor_error = 0.10
 use_input_data = True #False
 
 # Input emission line strengths
-# keys are emission line name (str), values are rest-frame wavelength (Angstroms)
+# keys are emission line name (str)
+# values are two-element tuple: (rest-frame wavelength (Angstroms), weight)
+# WPBWPB describe the weight
 # see documentation XXXX for additional information
 # WPB edit (e.g., OIII is not the blended feature, Balmer lines corrected for absorption, 
 #           keys must match input columns of form _FLUX, _ERR...)
@@ -60,8 +62,14 @@ use_input_data = True #False
 #           must have null value = -99
 #           must have both flux and error, i.e., cannot have flux with null error
 #           can also set to {} or None, if preferred
-emline_list_dict = {'OII' : 3727., 'OIII' : 5007.,
-                    'Hb' : 4861., 'Ha' : 6563.}
+emline_list_dict = {'OII' : (3727., 0.5), 'OIII' : (5007., 0.5),
+                    'Hb' : (4861., 1.),   'Ha' : (6563., 1.)}
+#emline_list_dict = {'OII'  : {'wave':3727., 'weight':0.5},
+#                    'OIII' : {'wave':5007., 'weight':0.5},  
+#                    'Hb'   : {'wave':4861., 'weight':1. },
+#                    'Ha'   : {'wave':6563., 'weight':1. }
+#                   }
+
 emline_factor = 1e-17 # numerical conversion from input values to units ergs/cm2/s
 # WPBWPB delete
 #emline_list_dict = None #{}

@@ -13,7 +13,7 @@ import logging
 import config
 from ssp import read_ssp
 from astropy.io import fits
-from astropy.table import Table
+from astropy.table import Table, vstack
 from mcsed import Mcsed
 from distutils.dir_util import mkpath
 from cosmology import Cosmology
@@ -388,16 +388,17 @@ def read_input_file(args):
 
     # read in emission line fluxes, if provided
     emline_fill_value = -99 # null value, should not be changed
-    if (args.emline_list_dict not in [None, {}]) & (args.use_input_data):
+    if args.use_emline_flux:
         em, emerr = Table(), Table()
         for emline in args.emline_list_dict.keys():
             colname, ecolname = '%s_FLUX' % emline, '%s_ERR' % emline
             if colname in Fcols:
                 em_arr = np.array(F[colname]  * args.emline_factor)
-                emerr_arr = np.array(F[ecolname] * args.emline_factor)
-# WPBWPB -- need to convert from ecs to something else?
-# WPBWPB: need to adjust for the emline error floor? 
-            # account for case where individual objects have null measurements
+                emerr_arr = np.max([F[ecolname], 
+                                    args.emline_floor_error*F[colname]],0)
+                emerr_arr *= args.emline_factor
+
+                # account for objects with null measurements
                 null_idx = np.where(np.array(F[colname])==emline_fill_value)[0]
                 em_arr[null_idx] = emline_fill_value
                 emerr_arr[null_idx] = emline_fill_value
@@ -410,8 +411,10 @@ def read_input_file(args):
 ## WPBWPB delete
 #                print('this is Fcols:   '+str(Fcols))
             else: 
-                em[colname]     = np.full(len(F), emline_fill_value)
-                emerr[ecolname] = np.full(len(F), emline_fill_value)
+## WPBWPB make a decision: all fill values, or remove from dictionary?
+#                em[colname]     = np.full(len(F), emline_fill_value)
+#                emerr[ecolname] = np.full(len(F), emline_fill_value)
+                del args.emline_list_dict[emline]
     else:
         em    = np.full((len(F),2), emline_fill_value)
         emerr = np.full((len(F),2), emline_fill_value)
@@ -525,35 +528,51 @@ WPBWPB: modify, document all outputs
         Mock input parameters for each fake galaxy, e.g. dust, sfh, mass
     '''
     # Build fake theta, set z, mass, age to get sfh_a
-# WPB: modify, different accounting of emission lines (other lines?)
 # WPB: modify, redshift range
     np.random.seed()
     thetas = mcsed_model.get_init_walker_values(num=nsamples, kind='ball')
     zobs = draw_uniform_dist(nsamples, 1.9, 2.35)
     params, y, yerr, true_y = [], [], [], []
+
     # add emission line fluxes
-# WPBWPB: want true and simulated line fluxes? how get errors?
     emline_fill_value = -99 # null value, should not be changed
-    if (args.emline_list_dict not in [None, {}]):
+    if args.use_emline_flux: 
         em, emerr = Table(), Table()
+        emlines = args.emline_list_dict.keys()
     else:
-        em    = np.full( (nsamples,2), emline_fill_value)
-        emerr = np.full( (nsamples,2), emline_fill_value)
+        em      = np.full( (nsamples,2), emline_fill_value)
+        emerr   = np.full( (nsamples,2), emline_fill_value)
     for theta, z in zip(thetas, zobs):
         mcsed_model.set_class_parameters(theta)
         mcsed_model.set_new_redshift(z)
+# WPBWPB delete
+        print('this is the redshift: z')
         mcsed_model.spectrum, mass = mcsed_model.build_csp()
-        # emission line fluxes
-        if (args.emline_list_dict not in [None, {}]): 
+        # simulate emission line fluxes
+        # true modeled fluxes are stored in mcsed_model.linefluxCSPdict
+        if args.use_emline_flux: 
             em_loc, emerr_loc = Table(), Table()
-            for emline in args.emline_list_dict.keys():
+            for emline in emlines:
+## WPBWPB delete
+#                print('emerr_loc: %s' % emerr_loc)
                 colname, ecolname = '%s_FLUX' % emline, '%s_ERR' % emline
-                emline_wave = args.emline_list_dict[emline]
-                em_loc[colname] = mcsed_model.measure_emline_flux(wave0=emline_wave)
-                emerr_loc[ecolname] = args.emline_floor_error
+                model_lineflux = mcsed_model.linefluxCSPdict[emline]
+## WPBWPB delete
+#                print('err and type: %s, %s' % (model_lineflux * args.emline_floor_error, type(model_lineflux * args.emline_floor_error)))
+#                print('colname, ecolname, and types: %s, %s, %s, %s' % (colname, ecolname, type(colname), type(ecolname)))
+                emerr_loc[ecolname] = [model_lineflux * args.emline_floor_error]
+## WPBWPB delete
+#                perturb = float(emerr_loc[ecolname]*np.random.randn(1))
+#                print(perturb) 
+                em_loc[colname] = [model_lineflux 
+                                + float(emerr_loc[ecolname]*np.random.randn(1))]
+# WPBWPB delete
+            print('these are the true and modeled line fluxes and errors:')
+            print(mcsed_model.linefluxCSPdict.values())
+            print(em_loc)
+            print(emerr_loc)
             em = vstack([em, em_loc])
             emerr = vstack([emerr, emerr_loc])
-# WPBWPB: simulate line fluxes within measurement errors?
 ## WPBWPB adjust log info.....
 #        args.log.info('%0.2f, %0.2f' % (hlims[-1]*1e17, np.log10(mass)))
         f_nu = mcsed_model.get_filter_fluxdensities()
@@ -672,6 +691,10 @@ def main(argv=None, ssp_info=None):
     mcsed_model.emline_dict = args.emline_list_dict
 
 ## WPBWPB delete
+#    print('This is emline dict:')
+#    print(args.emline_list_dict.keys())
+
+## WPBWPB delete
 #    return
 #    # WPB delete -- modify to following section and uncomment
 #    print(mcsed_model.dust_abs_class.Av)
@@ -681,8 +704,8 @@ def main(argv=None, ssp_info=None):
 #    print(mcsed_model.dust_abs_class.Rv)
 #    print(mcsed_model.dust_abs_class.evaluate(np.array([5000])))
 
-    # Adjust Rv in the dust absorption model, if specified in config file
-    # Otherwise, use the default value for the dust law being used
+    # Adjust Rv in the dust attenuation model, if specified in config file
+    # Otherwise, use the default value for the requested dust law
     if args.Rv >= 0:
         mcsed_model.dust_abs_class.Rv = args.Rv
     else:
@@ -784,6 +807,14 @@ def main(argv=None, ssp_info=None):
 ##WPBWPB delete
 #        print(read_input_file(args))
 #        print(em)
+## WPBWPB delete
+#        print('This is emline dict:')
+#        print(args.emline_list_dict.keys())
+#        return
+
+        # Update emission line dictionary (remove lines absent in input file)
+        mcsed_model.emline_dict = args.emline_list_dict
+
         iv = mcsed_model.get_params()
         for yi, ye, zi, fl, oi, fd, emi, emie in zip(y, yerr, z, flag, objid,
                                                    field, em, emerr):

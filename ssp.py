@@ -80,7 +80,7 @@ def read_fsps_neb(filename):
         ionization parameter grid
     spec : list (1 dim)
         elements are spectra (numpy array, 1 dim)
-        WPBWPB units
+        relative line fluxes, normalized by number of ionizing photons
     wave : numpy array (1 dim)
         wavelength for each spectrum in Angstroms
     '''
@@ -203,11 +203,15 @@ def get_nebular_emission(ages, wave, spec, logU, metallicity,
         C = scint.LinearNDInterpolator(V, cont_res[3]*1e48)
     if kind != 'cont':
         L = scint.LinearNDInterpolator(V, lines_res[3]*1e48)
-        # WPBWPB why make_gaussian_emission?
         garray = make_gaussian_emission(wave, lines_res[4])
+# WPBWPB: uncomment
     nspec = spec * 0.
-# WPBWPB: can I assume that the age array will be in order? can I quit once I pass 1e-2, i.e. stop searching ages
+## WPBWPB delete: only when saving an array without gaussian emission:
+##    print(nspec.shape)
+#    nspec = nspec[0:len(lines_res[4]), :] 
+#    garray = 1.
     for i, age in enumerate(ages):
+# WPBWPB: if age of birth cloud is user-defined, adjust here:
         if age <= 1e-2:
             if kind != 'line':
                 cont = C(metallicity, age*1e3, logU)
@@ -219,11 +223,19 @@ def get_nebular_emission(ages, wave, spec, logU, metallicity,
                                + np.interp(wave, cont_res[4], cont*qq)
                                + (garray * lines * qq).sum(axis=1))
             if kind == 'line':
+## WPBWPB delete: only when saving an array without gaussian emission:
+#                nspec[:, i] = lines * qq
+# WPBWPB: uncomment - original code
                 nspec[:, i] = (nspec[:, i] 
                                + (garray * lines * qq).sum(axis=1))
             if kind == 'cont':
                 nspec[:, i] = (nspec[:, i] 
                                + np.interp(wave, cont_res[4], cont*qq))
+
+## WPBWPB: only for case when no gaussian emission is included
+#    np.savez('SSP_nongaussian', linewave0=lines_res[4], linespec0=nspec)
+#    return 
+
     return nspec
 
 def add_nebular_emission(ages, wave, spec, logU, metallicity,
@@ -276,9 +288,13 @@ def collapse_emline_SSP(args, linewave, linespec, clight=2.99792e18):
 # loop through all emission line spectra for all ages, metallicities
 # WPBWPB: generalize such that does not assume only grid over ages and metallicities, but maybe ionization parameter (or arbitrary number of properties)
 # maybe I want to raise an error?
-    emlines, emwaves = args.emline_list_dict.keys(), args.emline_list_dict.values()
+    emlines = args.emline_list_dict.keys() 
+    emwaves = np.array(args.emline_list_dict.values())[:,0]
+## WPBWPB delete
+#    print('here are emwaves, type: %s, %s' % (emwaves, type(emwaves)))
     ssp_emline_collapsed = linespec[0:len(emlines),:,:]
-    waves_collapsed = []
+## WPBWPB delete
+#    waves_collapsed = []
     # loop through emission line spectra for all ages, metallicities
     dims = linespec.shape
     for i in range(dims[1]): # age array
@@ -291,7 +307,15 @@ def collapse_emline_SSP(args, linewave, linespec, clight=2.99792e18):
             spec = linespec[:,i,j]
             lineflux = []
             for emline in emlines:
-                w = args.emline_list_dict[emline]
+## WPBWPB delete
+#                print('here"s the emline dict and your element:')
+#                print(args.emline_list_dict)
+#                print([type(val) for val in args.emline_list_dict.values()])
+#                print(emline)
+#                print(args.emline_list_dict[emline])
+#                print(type(args.emline_list_dict[emline]))
+
+                w = args.emline_list_dict[emline][0]
                 indx = np.searchsorted(linewave, w)
                 if spec[indx] <= 0:
                     lineflux.append(0.)
@@ -303,7 +327,7 @@ def collapse_emline_SSP(args, linewave, linespec, clight=2.99792e18):
                 dnu = np.diff( clight / linewave[indx_lo:indx_hi+2])
                 y = spec[indx_lo:indx_hi+1]
                 # convert flux density in micro-Jy at 10 pc 
-                # to total flux at 10pc
+                # to total flux (ergs/s/cm2) at 10pc
                 lineflux.append(np.dot( y, np.abs(dnu) ) / 1e29)
             ssp_emline_collapsed[:,i,j] = lineflux
 
@@ -328,9 +352,12 @@ def number_ionizing_photons(wave, spectrum, clight=2.99792e18,
                             hplanck=6.626e-27):
     nu = clight / wave
     xlim = np.searchsorted(wave, 912., side='right')
-    x1 = np.abs(np.diff(nu[:xlim]))
-    x2 = spectrum[:xlim] / nu[:xlim]
+    x1 = np.abs(np.diff(nu[:xlim])) # dnu
+    x2 = spectrum[:xlim] / nu[:xlim] # micro-Jy at 10 pc / nu
     x3 = (x2[:-1] + x2[1:]) / 2.
+    # WPBWPB add to comments
+    # the sum of x1 * x3 gives micro-Jy at 10 pc / nu
+    # dividing by hplanck gives (number of ionizing photons * 1e-29 / cm2 at 10 pc)
     return np.sum(x1 * x3) / hplanck
 
 
@@ -352,10 +379,10 @@ WPBWPB: operate under assumption that spec, linespec are in same units
         # carry emission lines only, for measuring line fluxes
 # WPBWPB: only carry linespec if going to measure emission lines?
         if args.add_nebular:
-            spec = add_nebular_emission(ages, wave, spec, args.logU,
-                                        met)
             linespec = get_nebular_emission(ages, wave, spec, args.logU,
                                         met, kind='line')
+            spec = add_nebular_emission(ages, wave, spec, args.logU,
+                                        met)
         else:
             linespec = np.zeros(np.shape(spec))
 
@@ -396,8 +423,14 @@ WPBWPB: operate under assumption that spec, linespec are in same units
     linespec = np.moveaxis(np.array(ls), 0, 2)
     metallicities = args.metallicity_dict[args.isochrone]
 
+## WPBWPB delete
+#    linespec0 = linespec.copy()
+
     # Collapse the emission line SSP grid
     linewave, linespec = collapse_emline_SSP(args, wave0, linespec) 
+
+## WPBWPB delete
+#    np.savez('SSP', wave=wave, spec=spec, linewave=linewave, linespec=linespec, linewave0=wave0, linespec0=linespec0)
 
 ## WPB delete
 #    print('these are ages: %s' % ages)
