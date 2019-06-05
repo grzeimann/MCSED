@@ -363,6 +363,8 @@ def read_input_file(args):
     WPB
     FIELD, ID, Z
 
+WPBWPB: describe how emission line and filter dictionaries may be modified
+
     Parameters
     ----------
     args : class
@@ -761,6 +763,12 @@ def main(argv=None, ssp_info=None):
 # or build in another way -- need to know whether columns will be added
 # also relevant for the emission line dictionary -- may exclude some lines
 
+    # Adjust filter dictionary and emission line dictionary, if applicable
+    if (not args.test) & (not args.use_input_data):
+        input_file_data = read_input_file(args) 
+    else:
+        input_file_data = None
+
     # Build Filter Matrix
     filter_matrix = build_filter_matrix(args, wave)
 
@@ -895,7 +903,12 @@ def main(argv=None, ssp_info=None):
             print(mcsed_model.table)
     else:
     # WPB field/id
-        y, yerr, z, flag, objid, field, em, emerr = read_input_file(args)
+        # read input file, if not already done
+        if not input_file_data:
+            y, yerr, z, flag, objid, field, em, emerr = read_input_file(args)
+        else:
+            y, yerr, z, flag, objid, field, em, emerr = input_file_data
+
 ##WPBWPB delete
 #        print(read_input_file(args))
 #        print(em)
@@ -903,9 +916,6 @@ def main(argv=None, ssp_info=None):
 #        print('This is emline dict:')
 #        print(args.emline_list_dict.keys())
 #        return
-
-        # Update emission line dictionary (remove lines absent in input file)
-        mcsed_model.emline_dict = args.emline_list_dict
 
         iv = mcsed_model.get_params()
 # WPBWPB delete
