@@ -413,19 +413,20 @@ def read_input_file(args):
     # WPBWPB: need to adjust if change naming convention of emission lines
     input_filters = [col.split('_')[1] for col in Fcols if (len(col)>1) & (col[0:2]=='f_')]
     infilt_dict = {}
-    for fname in input_filters:
-        if op.exists('FILTERS/%s.res' % fname):
-            if '%s.res' % fname not in args.filt_dict.values():
-                findex = max(args.filt_dict.keys())+1
-                infilt_dict[ findex ] = '%s.res' % fname
-                Fcols = [c for c in Fcols if c not in ['f_'+fname, 'e_'+fname]]
-
-
+    if args.use_input_data:
+        for fname in input_filters:
+            if op.exists('FILTERS/%s.res' % fname):
+# WPBWPB -- uncomment following line after standardizing filter curves (all .res)
+#                if '%s.res' % fname not in args.filt_dict.values():
+                if ('%s.res' % fname not in args.filt_dict.values()) & (fname not in args.filt_dict.values()):
+                    findex = max(args.filt_dict.keys())+1
+                    infilt_dict[ findex ] = '%s.res' % fname
+                    Fcols = [c for c in Fcols if c not in ['f_'+fname, 'e_'+fname]]
 # WPBWPB: remove from Fcols now, or when actually reading in the data?
 # WPBWPB: some check on the filter curve to make sure it is formatted correctly?
 # WPBWPB: raise an error instead of printing a statement?
-        else:
-            print('*CAUTION* %s.res filter curve does not exist:' % fname)
+            else:
+                print('*CAUTION* %s.res filter curve does not exist:' % fname)
 
     # update master filter curve dictionary with user filters
     args.filt_dict.update(infilt_dict)
