@@ -127,6 +127,7 @@ WPBWPB units + are dimensions correct??
         self.dnu = np.abs(np.hstack([0., np.diff(2.99792e18 / self.wave)]))
         self.sfh_class = getattr(sfh, sfh_class)()
         self.dust_abs_class = getattr(dust_abs, dust_abs_class)()
+# WPBWPB: is ssp_class used?
         self.ssp_class = getattr(ssp, 'fsps_freeparams')()
         self.dust_em_class = getattr(dust_emission, dust_em_class)()
 # WPBWPB: describe SSP, lineSSP in comments... 
@@ -249,9 +250,9 @@ WPBWPB units + are dimensions correct??
         f_nu : numpy array (1 dim)
             Photometric flux densities for an input spectrum
         '''
-## WPBWPB delete
-#        print('shape of spectrum, filter_matrix, filter_flag:')
-#        print((self.spectrum.shape, self.filter_matrix.shape, self.filter_flag.shape))
+# WPBWPB delete
+        print('shape of spectrum, filter_matrix, filter_flag:')
+        print((self.spectrum.shape, self.filter_matrix.shape, self.filter_flag.shape))
         f_nu = np.dot(self.spectrum, self.filter_matrix[:, self.filter_flag])
         return f_nu
 

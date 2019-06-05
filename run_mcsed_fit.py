@@ -668,13 +668,15 @@ def main(argv=None, ssp_info=None):
 
         args.log.info('Reading in SSP model')
         ages, masses, wave, SSP, met, linewave, lineSSP = read_ssp(args)
-## WPBWPB delete
-#        print((wave.shape, linewave.shape))
-#        print(ages)
-#        return
 
     else:
         ages, masses, wave, SSP, met, linewave, lineSSP = ssp_info
+
+# WPBWPB delete
+    print((wave.shape, SSP.shape))
+#    print(ages)
+#    return
+
 
     # Build Filter Matrix
     filter_matrix = build_filter_matrix(args, wave)
