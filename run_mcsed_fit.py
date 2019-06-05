@@ -17,6 +17,8 @@ from astropy.table import Table, vstack
 from mcsed import Mcsed
 from distutils.dir_util import mkpath
 from cosmology import Cosmology
+# WPBWPB -- can remove this import
+import time
 
 def setup_logging():
     '''Setup Logging for MCSED, which allows us to track status of calls and
@@ -264,9 +266,13 @@ def build_filter_matrix(args, wave):
         As mentioned above, the Fil_matrix has rows of wavelength and
         columns for each filter in args.filt_dict/config.filt_dict
     '''
+# WPBWPB: either build from scratch each time, or check whether same dimensions
+# only takes <0.5 sec to build -- might take longer just to load the thing
     if op.exists(args.filter_matrix_name):
         return np.loadtxt(args.filter_matrix_name)
     else:
+# WPBWPB -- could remove
+        start_time = time.time()
         nfilters = len(args.filt_dict)
         Fil_matrix = np.zeros((len(wave), nfilters))
         for i in np.arange(nfilters):
@@ -278,6 +284,9 @@ def build_filter_matrix(args, wave):
                 S = 1.
             Fil_matrix[:, i] = new_through / S
         np.savetxt(args.filter_matrix_name, Fil_matrix)
+# WPBWPB -- could remove 
+        ellapsed_time = time.time() - start_time
+        print('Time to build filter matrix: %s sec' % ellapsed_time)
         return Fil_matrix
 
 
@@ -673,14 +682,22 @@ def main(argv=None, ssp_info=None):
     else:
         ages, masses, wave, SSP, met, linewave, lineSSP = ssp_info
 
-# WPBWPB delete
-    print((wave.shape, SSP.shape))
+## WPBWPB delete
+#    print((wave.shape, SSP.shape))
 #    print(ages)
 #    return
 
 
+# WPBWPB: issue: want to read in the input file before building filter matrix,
+# or build in another way -- need to know whether columns will be added
+# also relevant for the emission line dictionary -- may exclude some lines
+
     # Build Filter Matrix
     filter_matrix = build_filter_matrix(args, wave)
+
+## WPBWPB delete
+#    print('filter_matrix.shape: %s' % filter_matrix.shape)
+#    return
 
     # Make one instance of Mcsed for speed on initialization
     # Then replace the key variables each iteration for a given galaxy

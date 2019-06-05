@@ -250,9 +250,9 @@ WPBWPB units + are dimensions correct??
         f_nu : numpy array (1 dim)
             Photometric flux densities for an input spectrum
         '''
-# WPBWPB delete
-        print('shape of spectrum, filter_matrix, filter_flag:')
-        print((self.spectrum.shape, self.filter_matrix.shape, self.filter_flag.shape))
+## WPBWPB delete
+#        print('shape of spectrum, filter_matrix, filter_flag:')
+#        print((self.spectrum.shape, self.filter_matrix.shape, self.filter_flag.shape))
         f_nu = np.dot(self.spectrum, self.filter_matrix[:, self.filter_flag])
         return f_nu
 
@@ -280,13 +280,13 @@ WPBWPB units + are dimensions correct??
 
         ######################################################################
         # SSP Parameters
-# WPBWPB delete
-        print(start_value)
-        print(self.ssp_class.fix_met)
+## WPBWPB delete
+#        print(start_value)
+#        print(self.ssp_class.fix_met)
         self.ssp_class.set_parameters_from_list(theta, start_value)
         start_value += self.ssp_class.get_nparams()
-# WPBWPB delete
-        print(start_value)
+## WPBWPB delete
+#        print(start_value)
         ######################################################################
         # DUST EMISSION
         self.dust_em_class.set_parameters_from_list(theta, start_value)
@@ -328,24 +328,146 @@ WPBWPB units + are dimensions correct??
 #        print(self.lineSSP.shape)
         return self.SSP, self.lineSSP
 
-    def build_dustfree_CSP(self, sfr, ageval, age_birth):
-        '''WPBWPB FILL IN
+## WPBWPB delete -- recombine into single CSP building function
+#    def build_dustfree_CSP(self, sfr, ageval, age_birth):
+#        '''WPBWPB FILL IN
+#
+#        Parameters
+#        ----------
+#        sfr : WPBWPB units and form 
+#        ageval : float
+#            Current age of the object in Gyr
+#        age_birth : float
+#            Longevity of a birth cloud in Gyr
+#
+#        Returns
+#        -------
+#        spec_dustfree : 
+#        spec_birth_dustfree :
+#        linespec_dustfree : 
+#        mass :        
+#        '''
+#        # ageval sets limit on ssp_ages that are useable in model calculation
+#        # age_birth separates birth cloud and diffuse components
+## WPBWPB delete -- ageval, ssp_ages, age_birth are in units Gyr
+#        sel = (self.ssp_ages > age_birth) & (self.ssp_ages <= ageval)
+#        sel_birth = (self.ssp_ages <= age_birth) & (self.ssp_ages <= ageval)
+#        sel_age = self.ssp_ages <= ageval
+#
+#        # The weight is the time between ages of each SSP
+#        weight = np.diff(np.hstack([0, self.ssp_ages])) * 1e9 * sfr
+### WPBWPB delete
+##        weight_orig = weight.copy()
+#        weight_birth = weight.copy()
+#        weight_age = weight.copy()
+#        # Ages greater than ageval should have zero weight in CSP
+#        # weight should only include populations younger than ageval
+#        # and older than age_birth
+#        # weight_birth should only include populations younger than ageval
+#        # and no older than age_birth
+#        # weight_age only considers the age of the system (for mass)
+#        weight[~sel] = 0
+#        weight_birth[~sel_birth] = 0
+#        weight_age[~sel_age] = 0
+#
+#        # Cover the two cases where ssp_ages contains ageval and when not
+#        # A: index of last acceptable SSP age
+#        A = np.nonzero(self.ssp_ages <= ageval)[0][-1]
+#        # indices of SSP ages that are too old
+#        select_too_old = np.nonzero(self.ssp_ages >= ageval)[0]
+#        if len(select_too_old):
+#            # B: index of first SSP that is too old
+#            B = select_too_old[0]
+#            # only adjust weight if ageval falls between two SSP age gridpoints
+#            if A != B:
+#                lw = ageval - self.ssp_ages[A]
+#                wei = lw * 1e9 * np.interp(ageval, self.ssp_ages, sfr)
+#                if ageval > age_birth:
+#                    weight[B] = wei
+#                if ageval <= age_birth:
+#                    weight_birth[B] = wei
+#                weight_age[B] = wei
+#
+#        # Adjust weights of the young component
+#        # Cover two cases where ssp_ages contains age_birth and when not
+#        # A: index of last acceptable SSP age
+#        A = np.nonzero(self.ssp_ages <= age_birth)[0][-1]
+#        # indices of SSP ages that are too old
+#        select_too_old = np.nonzero(self.ssp_ages >= age_birth)[0]
+#        if (len(select_too_old)>0): # & (ageval>=age_birth):
+#            # B: index of first SSP that is too old
+#            B = select_too_old[0]
+#            if A != B:
+#                lw = age_birth - self.ssp_ages[A]
+#                wei = lw * 1e9 * np.interp(age_birth, self.ssp_ages, sfr)
+#                if ageval > age_birth:
+#                    weight[B] = weight_age[B] - wei
+#                if ageval >= age_birth:
+#                    weight_birth[B] = wei
+#                else:
+#                    weight_birth[B] = weight_age[B]
+#
+#### WPBWPB delete
+###        print('this is ageval, age birth:   %s,  %s' % (ageval, age_birth))
+##        # A summary table...
+##        t=Table()
+##        t['ageval'] = [ageval]*len(weight)
+##        t['age_birth'] = [age_birth]*len(weight)
+##        t['ssp_ages'] = self.ssp_ages
+##        t['weight_orig'] = weight_orig
+##        t['weight_young'] = weight_birth
+##        t['weight_old'] = weight
+##        t['weight_age'] = weight_age
+##        t.write('CSP_weights_ageval%s_birth%s.dat' % (ageval, age_birth),format='ascii') 
+##        return
+#
+#        # Finally, do the matrix multiplication
+#        spec_dustfree = np.dot(self.SSP, weight)
+#        spec_birth_dustfree = np.dot(self.SSP, weight_birth)
+#        linespec_dustfree = np.dot(self.lineSSP, weight_birth)
+#        mass = np.sum(weight_age * self.ssp_masses)
+#
+#        return spec_dustfree, spec_birth_dustfree, linespec_dustfree, mass
 
-        Parameters
-        ----------
-        sfr : WPBWPB units and form 
-        ageval : float
-            Current age of the object in Gyr
-        age_birth : float
-            Longevity of a birth cloud in Gyr
+
+    def build_csp(self, sfr=None):
+        '''Build a composite stellar population model for a given star
+        formation history, dust attenuation law, and dust emission law.
+
+        In addition to the returns it also modifies a lineflux dictionary
 
         Returns
         -------
-        spec_dustfree : 
-        spec_birth_dustfree :
-        linespec_dustfree : 
-        mass :        
+        csp : numpy array (1 dim)
+            Composite stellar population model at self.redshift
+WPBWPB units??
+        mass : float
+            Mass for csp given the SFH input
         '''
+        # Collapse for metallicity
+        SSP, lineSSP = self.get_ssp_spectrum()
+
+        # Need star formation rate from observation back to formation
+        if sfr is None:
+            sfr = self.sfh_class.evaluate(self.ssp_ages)
+        ageval = 10**self.sfh_class.age # Gyr
+
+        # Treat the birth cloud and diffuse component separately
+# WPBWPB: may want to modify: have this as user-defined setting...
+        age_birth = 10**-2 # Gyr 
+
+### WPBWPB delete - both in Gyr
+##        print('this is the ageval: %s' % ageval)
+##        print('this is ssp ages: %s' % self.ssp_ages)
+##        return
+
+## WPBWPB delete
+##        for ageval, age_birth in [ [0.008, 0.011 ], [0.005011872336272725, 0.011 ], [0.01, 0.011 ], [0.14, 0.011 ], [0.0116, 0.011 ], [0.1, 0.011 ], [0.0145, 0.01 ], [0.011, 0.011 ], [0.01, 0.01 ] ]:
+#        for ageval, age_birth in [ [0.01116, 0.011] ]:
+#            self.build_dustfree_CSP(sfr, ageval, age_birth)
+#        return
+
+        # Get dust-free CSPs, properly accounting for ages
         # ageval sets limit on ssp_ages that are useable in model calculation
         # age_birth separates birth cloud and diffuse components
 # WPBWPB delete -- ageval, ssp_ages, age_birth are in units Gyr
@@ -387,7 +509,6 @@ WPBWPB units + are dimensions correct??
                     weight_birth[B] = wei
                 weight_age[B] = wei
 
-        # Adjust weights of the young component
         # Cover two cases where ssp_ages contains age_birth and when not
         # A: index of last acceptable SSP age
         A = np.nonzero(self.ssp_ages <= age_birth)[0][-1]
@@ -406,69 +527,15 @@ WPBWPB units + are dimensions correct??
                 else:
                     weight_birth[B] = weight_age[B]
 
-### WPBWPB delete
-##        print('this is ageval, age birth:   %s,  %s' % (ageval, age_birth))
-#        # A summary table...
-#        t=Table()
-#        t['ageval'] = [ageval]*len(weight)
-#        t['age_birth'] = [age_birth]*len(weight)
-#        t['ssp_ages'] = self.ssp_ages
-#        t['weight_orig'] = weight_orig
-#        t['weight_young'] = weight_birth
-#        t['weight_old'] = weight
-#        t['weight_age'] = weight_age
-#        t.write('CSP_weights_ageval%s_birth%s.dat' % (ageval, age_birth),format='ascii') 
-#        return
-
-        # Finally, do the matrix multiplication
+        # Finally, do the matrix multiplication using the weights
         spec_dustfree = np.dot(self.SSP, weight)
         spec_birth_dustfree = np.dot(self.SSP, weight_birth)
         linespec_dustfree = np.dot(self.lineSSP, weight_birth)
         mass = np.sum(weight_age * self.ssp_masses)
 
-        return spec_dustfree, spec_birth_dustfree, linespec_dustfree, mass
-
-
-    def build_csp(self, sfr=None):
-        '''Build a composite stellar population model for a given star
-        formation history, dust attenuation law, and dust emission law.
-
-        In addition to the returns it also modifies a lineflux dictionary
-
-        Returns
-        -------
-        csp : numpy array (1 dim)
-            Composite stellar population model at self.redshift
-WPBWPB units??
-        mass : float
-            Mass for csp given the SFH input
-        '''
-        # Collapse for metallicity
-        SSP, lineSSP = self.get_ssp_spectrum()
-
-        # Need star formation rate from observation back to formation
-        if sfr is None:
-            sfr = self.sfh_class.evaluate(self.ssp_ages)
-        ageval = 10**self.sfh_class.age # Gyr
-
-        # Treat the birth cloud and diffuse component separately
-# WPBWPB: may want to modify: have this as user-defined setting...
-        age_birth = 10**-2 # Gyr 
-
-### WPBWPB delete - both in Gyr
-##        print('this is the ageval: %s' % ageval)
-##        print('this is ssp ages: %s' % self.ssp_ages)
-##        return
-
 ## WPBWPB delete
-##        for ageval, age_birth in [ [0.008, 0.011 ], [0.005011872336272725, 0.011 ], [0.01, 0.011 ], [0.14, 0.011 ], [0.0116, 0.011 ], [0.1, 0.011 ], [0.0145, 0.01 ], [0.011, 0.011 ], [0.01, 0.01 ] ]:
-#        for ageval, age_birth in [ [0.01116, 0.011] ]:
-#            self.build_dustfree_CSP(sfr, ageval, age_birth)
-#        return
-
-        # Get dust-free CSPs, properly accounting for ages
-        dustfree_CSP = self.build_dustfree_CSP(sfr, ageval, age_birth)
-        spec_dustfree, spec_birth_dustfree, linespec_dustfree, mass = dustfree_CSP 
+#        dustfree_CSP = self.build_dustfree_CSP(sfr, ageval, age_birth)
+#        spec_dustfree, spec_birth_dustfree, linespec_dustfree, mass = dustfree_CSP 
 
         # Need to correct spectrum for dust attenuation
         Alam = self.dust_abs_class.evaluate(self.wave)
