@@ -430,7 +430,7 @@ WPBWPB: describe how emission line and filter dictionaries may be modified
             else:
                 print('*CAUTION* %s.res filter curve does not exist:' % fname)
 
-    # update master filter curve dictionary with user filters
+    # update master filter curve dictionary with filters in user input file
     args.filt_dict.update(infilt_dict)
 
 # APPEND TO FILT_DICT
