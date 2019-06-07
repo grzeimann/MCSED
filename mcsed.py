@@ -553,15 +553,24 @@ WPBWPB units??
         spec_dustobscured += spec_birth_dustobscured
 
         # recompute attenuation for observed wavelength of emission lines
+# WPBWPB: Alam_emline should be evaluated at rest-frame wavelengths
         emwaves = self.emlinewave * (1. + self.redshift)
         Alam_emline = (self.dust_abs_class.evaluate(emwaves,new_wave=True)
                        / self.dust_abs_class.EBV_stars_gas)
+# WPBWPB: else, use a separate model
+
 ## WPBWPB delete
 #        print(emwaves)
 #        print(Alam_emline)
 #        print('shape of linespec_dustfree, emwaves : (%s, %s)' % (linespec_dustfree.shape, emwaves.shape))
         linespec_dustobscured = linespec_dustfree * 10**(-0.4*Alam_emline)
-# else, use a screen model
+
+## WPBWPB compare Alam in diffuse, birthcloud components
+#        print('diffuse, birth, emline Alam:')
+#        print(Alam[ np.searchsorted(self.wave, emwaves) ])
+#        print(Alam_birth[ np.searchsorted(self.wave, emwaves) ])
+#        print(Alam_emline)
+
 
 # WPB: exclude dust emission component altogether? Does it make a difference?
         # Change in bolometric Luminosity
