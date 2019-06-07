@@ -758,11 +758,6 @@ def main(argv=None, ssp_info=None):
 #    print(ages)
 #    return
 
-
-# WPBWPB: issue: want to read in the input file before building filter matrix,
-# or build in another way -- need to know whether columns will be added
-# also relevant for the emission line dictionary -- may exclude some lines
-
     # Adjust filter dictionary and emission line dictionary, if applicable
     if (not args.test) & (not args.use_input_data):
         input_file_data = read_input_file(args) 
@@ -817,18 +812,18 @@ def main(argv=None, ssp_info=None):
 
 #WPBWPB delete: this is where I adjust additional class params from config.py options
 
-    # Special case of fixed metallicity
+    # Specify whether metallicity is fixed
     if args.metallicity:
         mcsed_model.ssp_class.fix_met = True
         mcsed_model.ssp_class.met = args.metallicity
     else:
         mcsed_model.ssp_class.fix_met = False
 
+    # Specify whether dust emission is fixed
     if not args.fit_dust_em:
         mcsed_model.dust_em_class.fixed = True
     else:
         mcsed_model.dust_em_class.fixed = False
-# WPBWPB: maybe make more concise -- mcsed_model.dust_em_class.fixed = not args.fit_dust_em
 
     # Build names for parameters and labels for table
     names = mcsed_model.get_param_names()
@@ -869,7 +864,7 @@ def main(argv=None, ssp_info=None):
                                                     nsamples=args.nobjects)
 
         cnts = np.arange(args.count, args.count + len(z))
-# WPB: change emline input (?)
+
         for yi, ye, zi, tr, ty, cnt, emi, emie in zip(y, yerr, z, truth, true_y, 
                                                cnts, em, emerr):
             mcsed_model.input_params = tr
@@ -879,7 +874,6 @@ def main(argv=None, ssp_info=None):
             mcsed_model.data_fnu_e = ye
             mcsed_model.true_fnu = ty
             mcsed_model.set_new_redshift(zi)
-# WPBWPB: modify? true or perturbed emission line flux?
             mcsed_model.data_emline = emi
             mcsed_model.data_emline_e = emie
 
@@ -979,16 +973,27 @@ def main(argv=None, ssp_info=None):
                           names=['wavelength', 'spectrum'])
                 T.write('output/bestfitspec_%s_%05d_%s.dat' % (fd, oi, args.sfh),
                         overwrite=True, format='ascii.fixed_width_two_line')
-            if args.output_dict['bestfitflux']:
-                T = Table([mcsed_model.fluxwv, mcsed_model.fluxfn],
-                          names=['wavelength', 'fluxdensity'])
-                T.write('output/bestfitflux_%s_%05d_%s.dat' % (fd, oi, args.sfh),
+            if args.output_dict['fluxdensity']:
+                T = Table([mcsed_model.fluxwv, mcsed_model.fluxfn,
+                           mcsed_model.data_fnu, mcsed_model.data_fnu_e],
+                           names=['wavelength','model_fluxdensity',
+                                  'fluxdensity', 'fluxdensityerror'])
+                T.write('output/filterflux_%s_%05d_%s.dat' % (fd, oi, args.sfh),
                         overwrite=True, format='ascii.fixed_width_two_line')
-            if args.output_dict['observedflux']:
-                T = Table([mcsed_model.fluxwv, mcsed_model.data_fnu,
-                           mcsed_model.data_fnu_e],
-                           names=['wavelength', 'fluxdensity', 'fluxdensityerror'])
-                T.write('output/observedflux_%s_%05d_%s.dat' % (fd, oi, args.sfh),
+            if (args.output_dict['lineflux']) & (mcsed_model.use_emline_flux):
+                emwaves = np.array(mcsed_model.emline_dict.values())[:,0]
+                emweights = np.array(mcsed_model.emline_dict.values())[:,1]
+                emlines = mcsed_model.emline_dict.keys()
+                model_fl, fl, fle = [], [], []
+                for emline in emlines:
+                    model_fl.append( mcsed_model.linefluxCSPdict[emline] )
+                    fl.append( mcsed_model.data_emline['%s_FLUX' % emline] )
+                    fle.append( mcsed_model.data_emline_e['%s_ERR' % emline] )
+                T = Table([emwaves, emweights, model_fl, fl, fle],
+                          names=['rest_wavelength', 'weight', 'model_lineflux',
+                                 'lineflux', 'linefluxerror'])
+                T.sort('rest_wavelength')
+                T.write('output/lineflux_%s_%05d_%s.dat' % (fd, oi, args.sfh),
                         overwrite=True, format='ascii.fixed_width_two_line')
             last = mcsed_model.add_fitinfo_to_table(percentiles)
             print(mcsed_model.table)
