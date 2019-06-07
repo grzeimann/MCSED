@@ -10,8 +10,8 @@ ssp = 'fsps'  # options include: 'fsps'
 isochrone = 'padova'  # options include: 'padova'
 # SFH options include: 'constant', 'burst', 'polynomial', 'exponential', 
 #                      'double_powerlaw', 'empirical_direct', 'empirical',
-sfh = 'empirical_direct'
-dust_law = 'noll'  # options include: 'noll', 'calzetti'
+sfh = 'constant' #'empirical_direct'
+dust_law = 'calzetti' #'noll'  # options include: 'noll', 'calzetti'
 dust_em = 'DL07'  # options include: 'DL07'
 
 # Dust attenuation law parameters

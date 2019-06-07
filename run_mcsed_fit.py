@@ -887,9 +887,9 @@ def main(argv=None, ssp_info=None):
             mcsed_model.fit_model()
 
             if args.output_dict['sample plot']:
-                mcsed_model.sample_plot('output/sample_fake_%05d_%s' % (cnt, let))
+                mcsed_model.sample_plot('output/sample_fake_%05d' % (cnt))
             if args.output_dict['triangle plot']:
-                mcsed_model.triangle_plot('output/triangle_fake_%05d_%s_%s_%s' % (cnt, let, args.sfh, args.dust_law))
+                mcsed_model.triangle_plot('output/triangle_fake_%05d_%s_%s' % (cnt, args.sfh, args.dust_law))
 
             mcsed_model.table.add_row(['Test', cnt, zi] + [0.]*(len(labels)-3))
             last = mcsed_model.add_fitinfo_to_table(percentiles)
