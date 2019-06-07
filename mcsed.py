@@ -552,10 +552,8 @@ WPBWPB units??
         spec_dustfree += spec_birth_dustfree
         spec_dustobscured += spec_birth_dustobscured
 
-        # recompute attenuation for observed wavelength of emission lines
-# WPBWPB: Alam_emline should be evaluated at rest-frame wavelengths
-        emwaves = self.emlinewave * (1. + self.redshift)
-        Alam_emline = (self.dust_abs_class.evaluate(emwaves,new_wave=True)
+        # compute attenuation for emission lines
+        Alam_emline = (self.dust_abs_class.evaluate(self.emlinewave,new_wave=True)
                        / self.dust_abs_class.EBV_stars_gas)
 # WPBWPB: else, use a separate model
 
@@ -567,8 +565,8 @@ WPBWPB units??
 
 ## WPBWPB compare Alam in diffuse, birthcloud components
 #        print('diffuse, birth, emline Alam:')
-#        print(Alam[ np.searchsorted(self.wave, emwaves) ])
-#        print(Alam_birth[ np.searchsorted(self.wave, emwaves) ])
+#        print(Alam[ np.searchsorted(self.wave, self.emlinewave) ])
+#        print(Alam_birth[ np.searchsorted(self.wave, self.emlinewave) ])
 #        print(Alam_emline)
 
 
