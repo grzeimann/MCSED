@@ -418,13 +418,13 @@ WPBWPB: describe how emission line and filter dictionaries may be modified
     if args.use_input_data:
         for fname in input_filters:
             if op.exists('FILTERS/%s.res' % fname):
-# WPBWPB -- uncomment following line after standardizing filter curves (all .res)
-#                if '%s.res' % fname not in args.filt_dict.values():
-                if ('%s.res' % fname not in args.filt_dict.values()) & (fname not in args.filt_dict.values()):
+                if '%s.res' % fname not in args.filt_dict.values():
                     findex = max(args.filt_dict.keys())+1
-                    infilt_dict[ findex ] = '%s.res' % fname
-                    Fcols = [c for c in Fcols if c not in ['f_'+fname, 'e_'+fname]]
-# WPBWPB: remove from Fcols now, or when actually reading in the data?
+                else:
+                    findex = args.filt_dict.keys()[args.filt_dict.values().index('%s.res' % fname)]
+                infilt_dict[ findex ] = '%s.res' % fname
+                Fcols = [c for c in Fcols if c not in ['f_'+fname, 'e_'+fname]]
+                print('Reading %s photometry from input file' % fname)
 # WPBWPB: some check on the filter curve to make sure it is formatted correctly?
 # WPBWPB: raise an error instead of printing a statement?
             else:

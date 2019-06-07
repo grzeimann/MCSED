@@ -372,6 +372,8 @@ WPBWPB: need to determine units of all outputs
 WPBWPB: operate under assumption that spec, linespec are in same units
     '''
     import matplotlib.pyplot as plt
+    plt.ioff()
+
     s, ls, m = ([], [], [])
     for met in args.metallicity_dict[args.isochrone]:
         if args.ssp.lower() == 'fsps':
