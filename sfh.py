@@ -711,7 +711,7 @@ class empirical_direct:
 
 
     def evaluate(self, t):
-        ''' Evaluate double power law SFH
+        ''' Evaluate empirical direct SFH
         Parameters
         ----------
         t : numpy array (1 dim)
@@ -721,6 +721,10 @@ class empirical_direct:
         msfr : numpy array (1 dim)
             Star formation rate at given time in time array
         '''
+        if type(t) in [float, int]:
+            t = np.array([t])
+        elif type(t) != np.ndarray:
+            t = np.array(t)
         # linear SFR in each SFH time bin
         sfr_bin = 10. ** np.array(self.get_params()) 
         # Ensure that self.ages, t are both in units of log years
