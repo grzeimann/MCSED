@@ -16,7 +16,8 @@
 .. moduleauthor:: Greg Zeimann <gregz@astro.as.utexas.edu>
 
 """
-
+import matplotlib
+matplotlib.use("Agg")
 import logging
 import sfh
 import dust_abs

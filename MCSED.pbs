@@ -1,0 +1,38 @@
+#!/bin/bash
+## Submit job to "Open" allocation         
+#PBS -A open
+##PBS -A cyberlamp    #If you have access to cyberlamp, for example
+
+##PBS -l qos=cl_class        
+##PBS -l qos=cl_debug        
+## Time requested: 0 hours, 20 minutes, 0 seconds
+#PBS -l walltime=00:20:00    
+## Ask for one core on one node
+#PBS -l nodes=1:ppn=24    
+## Each processor will use no more than 1GB of RAM
+#PBS -l pmem=1gb             
+## combine STDOUT and STDERR into one file
+#PBS -j oe                   
+## Specificy job name, so easy to find in qstat
+#PBS -N MCSED
+## Uncomment next two PBS commands (by removing one of #'s in each line) and replace with your email if you want to be notifed when jobs start and stop
+#PBS -M gxn75@psu.edu       
+## Ask for emails when jobs begins, ends or aborts
+#PBS -m abe                  
+
+echo "Starting job $PBS_JOBNAME"
+date
+echo "Job id: $PBS_JOBID"
+echo "About to change into $PBS_O_WORKDIR"
+cd $PBS_O_WORKDIR            # Change into directory where job was submitted from
+source activate my_root # Make sure you're running the python that's in your home directory with emcee and corner installed
+echo "About to start MCSED"
+TRIAL_NAME="testing"  # Whatever you want to distinguish this MCSED run
+python run_mcsed_fit.py -tf aegis -o $TRIAL_NAME.dat -p  # Whatever you need to run here
+echo "python finished task"
+## Next, just organize output a little bit
+mkdir output/$TRIAL_NAME
+mv output/*.dat output/$TRIAL_NAME  ## Change this if you have several .dat files in output!
+mv output/*.png output/$TRIAL_NAME  ## Change this if you have several .png files in output!
+mv output/*$TRIAL_NAME* output/$TRIAL_NAME
+date

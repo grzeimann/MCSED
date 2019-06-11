@@ -414,6 +414,7 @@ WPBWPB: describe how emission line and filter dictionaries may be modified
     # check whether any additional photometry is provided by the user
     # WPBWPB: need to adjust if change naming convention of emission lines
     input_filters = [col.split('_')[1] for col in Fcols if (len(col)>1) & (col[0:2]=='f_')]
+    print "Input filters: ", input_filters
     infilt_dict = {}
     if args.use_input_data:
         for fname in input_filters:
@@ -423,7 +424,14 @@ WPBWPB: describe how emission line and filter dictionaries may be modified
                 if ('%s.res' % fname not in args.filt_dict.values()) & (fname not in args.filt_dict.values()):
                     findex = max(args.filt_dict.keys())+1
                     infilt_dict[ findex ] = '%s.res' % fname
-                    Fcols = [c for c in Fcols if c not in ['f_'+fname, 'e_'+fname]]
+                else:
+                    if ('%s.res' % fname in args.filt_dict.values()):
+                        findex = args.filt_dict.keys()[args.filt_dict.values().index('%s.res' % fname)]
+                    else:
+                        findex = args.filt_dict.keys()[args.filt_dict.values().index('%s')]
+                    infilt_dict[findex] = '%s.res' % fname
+                print "Reading %s photometry from input file" %(fname)
+                Fcols = [c for c in Fcols if c not in ['f_'+fname, 'e_'+fname]]
 # WPBWPB: remove from Fcols now, or when actually reading in the data?
 # WPBWPB: some check on the filter curve to make sure it is formatted correctly?
 # WPBWPB: raise an error instead of printing a statement?
@@ -431,6 +439,7 @@ WPBWPB: describe how emission line and filter dictionaries may be modified
                 print('*CAUTION* %s.res filter curve does not exist:' % fname)
 
     # update master filter curve dictionary with user filters
+    print infilt_dict
     args.filt_dict.update(infilt_dict)
 
 # APPEND TO FILT_DICT
@@ -459,6 +468,7 @@ WPBWPB: describe how emission line and filter dictionaries may be modified
             elif ind in infilt_dict.keys():
                 colname  = "f_"+infilt_dict[ind].split('.res')[0]
                 ecolname = "e_"+infilt_dict[ind].split('.res')[0]
+                print "We are including a column for the photometric filter %s" %(colname)
             # WPB delete - if neither, set to zero and move on
             else:
                 y[i, j] = 0.0

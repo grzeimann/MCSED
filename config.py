@@ -25,7 +25,7 @@ EBV_stars_gas = -1
 # If True, fit the dust emission component. 
 # If False, remove all filters redward of rest-frame wave_dust_em microns 
 # and fix dust emission parameters to umin=2.0, gamma=0.05, qpah=2.5 
-fit_dust_em = False #True # False
+fit_dust_em = True #False
 wave_dust_em = 2.5 # rest-frame wavelength in microns 
 
 # EMCEE parameters

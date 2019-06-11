@@ -371,6 +371,8 @@ def read_ssp(args):
 WPBWPB: need to determine units of all outputs
 WPBWPB: operate under assumption that spec, linespec are in same units
     '''
+    import matplotlib
+    matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     s, ls, m = ([], [], [])
     for met in args.metallicity_dict[args.isochrone]:
