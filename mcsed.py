@@ -878,6 +878,7 @@ WPBWPB units??
                     color='dimgray', zorder=8)
         chi2 = (1. / (len(self.data_fnu) - 1) *
                 (((self.data_fnu - self.fluxfn) / self.data_fnu_e)**2).sum())
+        # WPBWPB: reduced chi^2 or not? properly accounting for number of data points, including emlines?
         if self.input_params is not None:
             self.set_class_parameters(self.input_params)
             self.sfh_class.plot(ax1, color='k', alpha=1.0)

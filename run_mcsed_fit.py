@@ -186,8 +186,7 @@ def parse_args(argv=None):
                   'dust_em', 'Rv', 'EBV_stars_gas', 'wave_dust_em',
                   'emline_list_dict', 'emline_factor', 'use_input_data',
                   'metallicity_mass_relationship', 'metallicity_dict',
-                  'filt_dict', 'catalog_filter_dict', 'filter_matrix_name',
-                  'catalog_maglim_dict',
+                  'filt_dict', 'catalog_filter_dict', 'catalog_maglim_dict', 
                   'output_dict', 'param_percentiles', 'reserved_cores']
     for arg_i in arg_inputs:
         try:
@@ -266,29 +265,7 @@ def build_filter_matrix(args, wave):
         As mentioned above, the Fil_matrix has rows of wavelength and
         columns for each filter in args.filt_dict/config.filt_dict
     '''
-## WPBWPB: either build from scratch each time, or check whether same dimensions
-## only takes <0.5 sec to build -- might take longer just to load the thing
-#    if op.exists(args.filter_matrix_name):
-#        return np.loadtxt(args.filter_matrix_name)
-#    else:
-## WPBWPB -- could remove
-#        start_time = time.time()
-#        nfilters = len(args.filt_dict)
-#        Fil_matrix = np.zeros((len(wave), nfilters))
-#        for i in np.arange(nfilters):
-#            wv, through = np.loadtxt(op.join('FILTERS', args.filt_dict[i]),
-#                                     unpack=True)
-#            new_through = np.interp(wave, wv, through, 0.0, 0.0)
-#            S = np.sum(new_through)
-#            if S == 0.:
-#                S = 1.
-#            Fil_matrix[:, i] = new_through / S
-#        np.savetxt(args.filter_matrix_name, Fil_matrix)
-## WPBWPB -- could remove 
-#        ellapsed_time = time.time() - start_time
-#        print('Time to build filter matrix: %s sec' % ellapsed_time)
-#        return Fil_matrix
-
+#WPBWPB delete
     start_time = time.time()
     nfilters = len(args.filt_dict)
     Fil_matrix = np.zeros((len(wave), nfilters))
@@ -300,10 +277,10 @@ def build_filter_matrix(args, wave):
         if S == 0.:
             S = 1.
         Fil_matrix[:, i] = new_through / S
-#     np.savetxt(args.filter_matrix_name, Fil_matrix)
 # WPBWPB -- could remove 
     ellapsed_time = time.time() - start_time
     print('Time to build filter matrix: %s sec' % ellapsed_time)
+
     return Fil_matrix
 
 
