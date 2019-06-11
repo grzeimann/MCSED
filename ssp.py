@@ -54,18 +54,38 @@ def get_coarser_wavelength_fsps(wave, spec, redwave=1e5):
 def bin_ages_fsps(args, ages, spec):
     ''' FILL IN
 
+    Parameters
+    ----------
+    args : FILL IN
+    ages :
+        SSP age grid in Gyr
+
     returns age (Gyr), blah
     '''
     sfh_class = getattr(sfh, args.sfh)()
-    sel = ages >= 6.
+    # WPBWPB delete: input ages are in Gyr
+    sel = ages >= 10**-3
+## WPBWPB delete
+#    print('these are SSP ages before re-gridding')
+#    print(ages)
     ages, spec = (ages[sel], spec[:, sel])
-    weight = np.diff(np.hstack([0., 10**ages]))
-    agebin = np.hstack([0., sfh_class.ages])
-    nspec = np.zeros((spec.shape[0], len(sfh_class.ages)))
-    for i in np.arange(len(sfh_class.ages)):
-        sel = np.where((ages >= agebin[i]) * (ages < agebin[i+1]))[0]
+    # weights are the amount of time (yrs) between the age bins
+    weight = np.diff(np.hstack([0., ages * 10**9.]))
+    # t_birth, sfh_class.ages are in units log(years)
+    # WPBWPB delete: want agebin in same units as ages, i.e., Gyr
+    sfh_ages_Gyr = 10.**(np.array(sfh_class.ages)-9.)
+## WPBWPB delete
+#    print('these are sfh_ages_Gyr:\n%s' % sfh_ages_Gyr)
+    agebin_list = [10.**(args.t_birth-9.), sfh_ages_Gyr]
+    # Add any SSPs older than last SFH age grid point
+    if max(ages) > max(sfh_ages_Gyr):
+        agebin_list.append( max(ages) )
+    agebin = np.hstack([0.] + agebin_list)
+    nspec = np.zeros((spec.shape[0], len(agebin)-1))
+    for i in np.arange(nspec.shape[1]):
+        sel = np.where((ages > agebin[i]) * (ages <= agebin[i+1]))[0]
         nspec[:, i] = np.dot(spec[:, sel], weight[sel]) / weight[sel].sum()
-    return 10**(np.array(sfh_class.ages)-9.), nspec
+    return agebin[1:], nspec
 
 
 def read_fsps_neb(filename):
@@ -80,7 +100,8 @@ def read_fsps_neb(filename):
         ionization parameter grid
     spec : list (1 dim)
         elements are spectra (numpy array, 1 dim)
-        relative line fluxes, normalized by number of ionizing photons
+        relative line fluxes, normalized by number of ionizing photons,
+        i.e., units of the table values are inverse (photons / s)
     wave : numpy array (1 dim)
         wavelength for each spectrum in Angstroms
     '''
@@ -167,6 +188,7 @@ def read_fsps(args, metallicity):
         print(']')
         sys.exit(1)
     ages, masses, spec, wave = read_fsps_ssp(filename)
+    # convert from solar bolometric luminosity per Hz to micro-Jy at 10 pc
     spec = np.array(spec).swapaxes(0, 1) * solar_microjansky
     ages, masses = (np.array(ages), np.array(masses))
     # Total mass including remnants, so set to 1.
@@ -187,6 +209,11 @@ def get_nebular_emission(ages, wave, spec, logU, metallicity,
         {'both', 'line', 'cont'}
         'line', 'cont' return only the line and continuum nebular emission
         'both' returns line and continuum nebular emission
+
+    Returns
+    -------
+    FILL IN :
+        nebular emission spectrum in units micro-Jy at 10 pc
     '''
     while kind not in ['line', 'cont', 'both']:
         kind = input("Invalid entry. Please enter 'line', 'cont', or 'both'")
@@ -217,6 +244,11 @@ def get_nebular_emission(ages, wave, spec, logU, metallicity,
                 cont = C(metallicity, age*1e3, logU)
             if kind != 'cont':
                 lines = L(metallicity, age*1e3, logU)
+            # qq has units 1e-29 photons / s / cm^2 at 10 pc
+            # sollum has units ergs / s
+            # table values (lines) have units s / photons
+            # garray has units per Hz
+            # --> product has units micro-Jy at 10 pc
             qq = number_ionizing_photons(wave, spec[:, i]) / 1e48 * sollum
             if kind == 'both': 
                 nspec[:, i] = (nspec[:, i] 
@@ -337,6 +369,17 @@ def collapse_emline_SSP(args, linewave, linespec, clight=2.99792e18):
 
 
 def make_gaussian_emission(wavebig, wave, stddev=1., clight=2.99792e18):
+    ''' FILL IN
+
+    Parameters
+    ----------
+    wavebig, wave both in units of Angstroms
+
+    Returns
+    -------
+    gspec : FILL IN
+        in units per Hz
+    '''
     gspec = np.zeros((len(wavebig), len(wave)))
     G = Gaussian1DKernel(stddev).array
     mid = len(G) / 2
@@ -350,14 +393,27 @@ def make_gaussian_emission(wavebig, wave, stddev=1., clight=2.99792e18):
 
 def number_ionizing_photons(wave, spectrum, clight=2.99792e18,
                             hplanck=6.626e-27):
-    nu = clight / wave
+    '''
+    FILL IN
+
+    Parameters
+    ----------
+    wave : numpy array (1 dim)
+        wavelength grid in units of Angstroms
+    spectrum : numpy array (1 dim)
+        Spectrum in f_nu (micro Janskies, i.e., 1e-29 ergs/s/cm^2/Hz) at 10pc
+ 
+    Returns
+    -------
+    float
+        number of photons capable of ionizing Hydrogen
+        in units of 1e-29 photons / s / cm^2 at 10 pc
+    '''
+    nu = clight / wave 
     xlim = np.searchsorted(wave, 912., side='right')
-    x1 = np.abs(np.diff(nu[:xlim])) # dnu
-    x2 = spectrum[:xlim] / nu[:xlim] # micro-Jy at 10 pc / nu
-    x3 = (x2[:-1] + x2[1:]) / 2.
-    # WPBWPB add to comments
-    # the sum of x1 * x3 gives micro-Jy at 10 pc / nu
-    # dividing by hplanck gives (number of ionizing photons * 1e-29 / cm2 at 10 pc)
+    x1 = np.abs(np.diff(nu[:xlim])) 
+    x2 = spectrum[:xlim] / nu[:xlim] 
+    x3 = (x2[:-1] + x2[1:]) / 2. 
     return np.sum(x1 * x3) / hplanck
 
 
@@ -374,10 +430,17 @@ WPBWPB: operate under assumption that spec, linespec are in same units
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    s, ls, m = ([], [], [])
+    plt.ioff()
+
+## WPBWPB: m list unused
+#    s, ls, m = ([], [], [])
+    s, ls = [], []
     for met in args.metallicity_dict[args.isochrone]:
         if args.ssp.lower() == 'fsps':
             ages, masses, wave, spec = read_fsps(args, met)
+## WPBWPB delete
+#            print('these are ages from read_fsps:')
+#            print(ages)
         # carry emission lines only, for measuring line fluxes
 # WPBWPB: only carry linespec if going to measure emission lines?
         if args.add_nebular:
@@ -391,8 +454,8 @@ WPBWPB: operate under assumption that spec, linespec are in same units
 # WPBWPB add comment
         if args.sfh == 'empirical' or args.sfh == 'empirical_direct':
             ages0 = ages.copy()
-            ages, spec = bin_ages_fsps(args, np.log10(ages0)+9., spec)
-            ages9, linespec = bin_ages_fsps(args, np.log10(ages0)+9., linespec)
+            ages, spec = bin_ages_fsps(args, ages0, spec)
+            ages9, linespec = bin_ages_fsps(args, ages0, linespec)
         masses = np.ones(ages.shape)
         # do not smooth the emission line grid
         wave0 = wave.copy()
@@ -400,12 +463,13 @@ WPBWPB: operate under assumption that spec, linespec are in same units
             wave, spec = get_coarser_wavelength_fsps(wave0, spec, redwave=200e4)
         else:
             wave, spec = get_coarser_wavelength_fsps(wave0, spec)
-        wei = (np.diff(np.hstack([0., ages])) *
-               getattr(sfh, args.sfh)().evaluate(ages))
+## WPBWPB delete -- appears unused
+#        wei = (np.diff(np.hstack([0., ages])) *
+#               getattr(sfh, args.sfh)().evaluate(ages))
         s.append(spec)
         ls.append(linespec)
-# WPBWPB following line appears unused... 
-        m.append(np.dot(spec, wei)/spec.shape[1])
+## WPBWPB following line appears unused... 
+#        m.append(np.dot(spec, wei)/spec.shape[1])
 
     # for plotting purposes only
     fig = plt.figure(figsize=(8, 8))

@@ -65,7 +65,7 @@ def parallel_map(func, argv, args, ncpu, ssp_info, clean=True, **kwargs):
         v = [len(i) for i in np.array_split(x, ncpu)]
         counts = np.full(len(v), 1)
         counts[1:] += np.cumsum(v)[:-1]
-        chunks = [argv + ['--nobjects', '%i' % vi, '--count', '%i' % cnt]
+        chunks = [argv + ['--nobjects', '%i' % vi, '--count', '%i' % cnt, '--already_parallel']
                   for vi, cnt in zip(v, counts)]
     else:
         mkpath('temp')

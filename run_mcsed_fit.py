@@ -181,13 +181,13 @@ def parse_args(argv=None):
 # and if cannot be passed on command line, it will already defer to config file
 # unused from parser args... filename, output_filename, test, test_field, parallel, count
     arg_inputs = ['ssp', 'metallicity', 'isochrone', 'sfh', 'dust_law',
+                  't_birth',
                   'nwalkers', 'nsteps', 'add_nebular', 'logU', 'fit_dust_em',
                   'phot_floor_error', 'emline_floor_error', 'nobjects',
                   'dust_em', 'Rv', 'EBV_stars_gas', 'wave_dust_em',
                   'emline_list_dict', 'emline_factor', 'use_input_data',
                   'metallicity_mass_relationship', 'metallicity_dict',
-                  'filt_dict', 'catalog_filter_dict', 'filter_matrix_name',
-                  'catalog_maglim_dict',
+                  'filt_dict', 'catalog_filter_dict', 'catalog_maglim_dict', 
                   'output_dict', 'param_percentiles', 'reserved_cores']
     for arg_i in arg_inputs:
         try:
@@ -266,29 +266,7 @@ def build_filter_matrix(args, wave):
         As mentioned above, the Fil_matrix has rows of wavelength and
         columns for each filter in args.filt_dict/config.filt_dict
     '''
-## WPBWPB: either build from scratch each time, or check whether same dimensions
-## only takes <0.5 sec to build -- might take longer just to load the thing
-#    if op.exists(args.filter_matrix_name):
-#        return np.loadtxt(args.filter_matrix_name)
-#    else:
-## WPBWPB -- could remove
-#        start_time = time.time()
-#        nfilters = len(args.filt_dict)
-#        Fil_matrix = np.zeros((len(wave), nfilters))
-#        for i in np.arange(nfilters):
-#            wv, through = np.loadtxt(op.join('FILTERS', args.filt_dict[i]),
-#                                     unpack=True)
-#            new_through = np.interp(wave, wv, through, 0.0, 0.0)
-#            S = np.sum(new_through)
-#            if S == 0.:
-#                S = 1.
-#            Fil_matrix[:, i] = new_through / S
-#        np.savetxt(args.filter_matrix_name, Fil_matrix)
-## WPBWPB -- could remove 
-#        ellapsed_time = time.time() - start_time
-#        print('Time to build filter matrix: %s sec' % ellapsed_time)
-#        return Fil_matrix
-
+#WPBWPB delete
     start_time = time.time()
     nfilters = len(args.filt_dict)
     Fil_matrix = np.zeros((len(wave), nfilters))
@@ -300,10 +278,10 @@ def build_filter_matrix(args, wave):
         if S == 0.:
             S = 1.
         Fil_matrix[:, i] = new_through / S
-#     np.savetxt(args.filter_matrix_name, Fil_matrix)
 # WPBWPB -- could remove 
     ellapsed_time = time.time() - start_time
     print('Time to build filter matrix: %s sec' % ellapsed_time)
+
     return Fil_matrix
 
 
@@ -419,27 +397,19 @@ WPBWPB: describe how emission line and filter dictionaries may be modified
     if args.use_input_data:
         for fname in input_filters:
             if op.exists('FILTERS/%s.res' % fname):
-# WPBWPB -- uncomment following line after standardizing filter curves (all .res)
-#                if '%s.res' % fname not in args.filt_dict.values():
-                if ('%s.res' % fname not in args.filt_dict.values()) & (fname not in args.filt_dict.values()):
+                if '%s.res' % fname not in args.filt_dict.values():
                     findex = max(args.filt_dict.keys())+1
-                    infilt_dict[ findex ] = '%s.res' % fname
                 else:
-                    if ('%s.res' % fname in args.filt_dict.values()):
-                        findex = args.filt_dict.keys()[args.filt_dict.values().index('%s.res' % fname)]
-                    else:
-                        findex = args.filt_dict.keys()[args.filt_dict.values().index('%s')]
-                    infilt_dict[findex] = '%s.res' % fname
-                print "Reading %s photometry from input file" %(fname)
+                    findex = args.filt_dict.keys()[args.filt_dict.values().index('%s.res' % fname)]
+                infilt_dict[ findex ] = '%s.res' % fname
                 Fcols = [c for c in Fcols if c not in ['f_'+fname, 'e_'+fname]]
-# WPBWPB: remove from Fcols now, or when actually reading in the data?
+                print('Reading %s photometry from input file' % fname)
 # WPBWPB: some check on the filter curve to make sure it is formatted correctly?
 # WPBWPB: raise an error instead of printing a statement?
             else:
                 print('*CAUTION* %s.res filter curve does not exist:' % fname)
 
-    # update master filter curve dictionary with user filters
-    print infilt_dict
+    # update master filter curve dictionary with filters in user input file
     args.filt_dict.update(infilt_dict)
 
 # APPEND TO FILT_DICT
@@ -768,11 +738,6 @@ def main(argv=None, ssp_info=None):
 #    print(ages)
 #    return
 
-
-# WPBWPB: issue: want to read in the input file before building filter matrix,
-# or build in another way -- need to know whether columns will be added
-# also relevant for the emission line dictionary -- may exclude some lines
-
     # Adjust filter dictionary and emission line dictionary, if applicable
     if (not args.test) & (not args.use_input_data):
         input_file_data = read_input_file(args) 
@@ -825,20 +790,23 @@ def main(argv=None, ssp_info=None):
     else:
         args.EBV_stars_gas = mcsed_model.dust_abs_class.EBV_stars_gas
 
+    # Specify the age of the birth cloud (suffer different attenuation)
+    mcsed_model.t_birth = 10**(args.t_birth-9.) # Gyr
+
 #WPBWPB delete: this is where I adjust additional class params from config.py options
 
-    # Special case of fixed metallicity
+    # Specify whether metallicity is fixed
     if args.metallicity:
         mcsed_model.ssp_class.fix_met = True
         mcsed_model.ssp_class.met = args.metallicity
     else:
         mcsed_model.ssp_class.fix_met = False
 
+    # Specify whether dust emission is fixed
     if not args.fit_dust_em:
         mcsed_model.dust_em_class.fixed = True
     else:
         mcsed_model.dust_em_class.fixed = False
-# WPBWPB: maybe make more concise -- mcsed_model.dust_em_class.fixed = not args.fit_dust_em
 
     # Build names for parameters and labels for table
     names = mcsed_model.get_param_names()
@@ -879,7 +847,7 @@ def main(argv=None, ssp_info=None):
                                                     nsamples=args.nobjects)
 
         cnts = np.arange(args.count, args.count + len(z))
-# WPB: change emline input (?)
+
         for yi, ye, zi, tr, ty, cnt, emi, emie in zip(y, yerr, z, truth, true_y, 
                                                cnts, em, emerr):
             mcsed_model.input_params = tr
@@ -889,7 +857,6 @@ def main(argv=None, ssp_info=None):
             mcsed_model.data_fnu_e = ye
             mcsed_model.true_fnu = ty
             mcsed_model.set_new_redshift(zi)
-# WPBWPB: modify? true or perturbed emission line flux?
             mcsed_model.data_emline = emi
             mcsed_model.data_emline_e = emie
 
@@ -903,9 +870,9 @@ def main(argv=None, ssp_info=None):
             mcsed_model.fit_model()
 
             if args.output_dict['sample plot']:
-                mcsed_model.sample_plot('output/sample_fake_%05d_%s' % (cnt, let))
+                mcsed_model.sample_plot('output/sample_fake_%05d' % (cnt))
             if args.output_dict['triangle plot']:
-                mcsed_model.triangle_plot('output/triangle_fake_%05d_%s_%s_%s' % (cnt, let, args.sfh, args.dust_law))
+                mcsed_model.triangle_plot('output/triangle_fake_%05d_%s_%s' % (cnt, args.sfh, args.dust_law))
 
             mcsed_model.table.add_row(['Test', cnt, zi] + [0.]*(len(labels)-3))
             last = mcsed_model.add_fitinfo_to_table(percentiles)
@@ -989,16 +956,27 @@ def main(argv=None, ssp_info=None):
                           names=['wavelength', 'spectrum'])
                 T.write('output/bestfitspec_%s_%05d_%s.dat' % (fd, oi, args.sfh),
                         overwrite=True, format='ascii.fixed_width_two_line')
-            if args.output_dict['bestfitflux']:
-                T = Table([mcsed_model.fluxwv, mcsed_model.fluxfn],
-                          names=['wavelength', 'fluxdensity'])
-                T.write('output/bestfitflux_%s_%05d_%s.dat' % (fd, oi, args.sfh),
+            if args.output_dict['fluxdensity']:
+                T = Table([mcsed_model.fluxwv, mcsed_model.fluxfn,
+                           mcsed_model.data_fnu, mcsed_model.data_fnu_e],
+                           names=['wavelength','model_fluxdensity',
+                                  'fluxdensity', 'fluxdensityerror'])
+                T.write('output/filterflux_%s_%05d_%s.dat' % (fd, oi, args.sfh),
                         overwrite=True, format='ascii.fixed_width_two_line')
-            if args.output_dict['observedflux']:
-                T = Table([mcsed_model.fluxwv, mcsed_model.data_fnu,
-                           mcsed_model.data_fnu_e],
-                           names=['wavelength', 'fluxdensity', 'fluxdensityerror'])
-                T.write('output/observedflux_%s_%05d_%s.dat' % (fd, oi, args.sfh),
+            if (args.output_dict['lineflux']) & (mcsed_model.use_emline_flux):
+                emwaves = np.array(mcsed_model.emline_dict.values())[:,0]
+                emweights = np.array(mcsed_model.emline_dict.values())[:,1]
+                emlines = mcsed_model.emline_dict.keys()
+                model_fl, fl, fle = [], [], []
+                for emline in emlines:
+                    model_fl.append( mcsed_model.linefluxCSPdict[emline] )
+                    fl.append( mcsed_model.data_emline['%s_FLUX' % emline] )
+                    fle.append( mcsed_model.data_emline_e['%s_ERR' % emline] )
+                T = Table([emwaves, emweights, model_fl, fl, fle],
+                          names=['rest_wavelength', 'weight', 'model_lineflux',
+                                 'lineflux', 'linefluxerror'])
+                T.sort('rest_wavelength')
+                T.write('output/lineflux_%s_%05d_%s.dat' % (fd, oi, args.sfh),
                         overwrite=True, format='ascii.fixed_width_two_line')
             last = mcsed_model.add_fitinfo_to_table(percentiles)
             print(mcsed_model.table)

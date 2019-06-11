@@ -11,8 +11,10 @@ isochrone = 'padova'  # options include: 'padova'
 # SFH options include: 'constant', 'burst', 'polynomial', 'exponential', 
 #                      'double_powerlaw', 'empirical_direct', 'empirical',
 sfh = 'empirical_direct'
-dust_law = 'noll'  # options include: 'noll', 'calzetti'
+dust_law = 'calzetti' #'noll'  # options include: 'noll', 'calzetti'
 dust_em = 'DL07'  # options include: 'DL07'
+
+t_birth = 7. # age of the birth cloud (log years)
 
 # Dust attenuation law parameters
 # if set to a negative value, use the default value for dust law of choice
@@ -93,8 +95,8 @@ output_dict = {'parameters'    : True,
                'settings'      : True, 
                'fitposterior'  : True,
                'bestfitspec'   : True,
-               'bestfitflux'   : True,
-               'observedflux'  : True,
+               'fluxdensity'   : True,
+               'lineflux'      : True,
                'triangle plot' : True,
                'sample plot'   : True,
                'image format'  : 'png'}
@@ -118,34 +120,36 @@ metallicity_dict = {'padova': [0.0002, 0.0003, 0.0004, 0.0005, 0.0006, 0.0008,
 # Filter information from the Skelton+14 catalog
 
 # Common filter file names in FILTERS folder
-filter_matrix_name = 'standard_filter_matrix.txt'
+
 filt_dict = {0: 'SubB.res', 1: 'SubIB427.res', 2: 'SubIB445.res',
              3: 'SubIB464.res', 4: 'CFHTi.res', 5: 'SubIB484.res',
              6: 'SubIB505.res', 7: 'SubIB527.res', 8: 'SubIB550.res',
              9: 'SubIB574.res', 10: 'SubIB598.res', 11: 'SubIB624.res',
              12: 'SubIB651.res', 13: 'SubIB679.res', 14: 'SubIB709.res',
-             15: 'SubIB767.res', 16: 'SubIB827.res',  17: 'SubIB856.res',
-             18: 'SubIB907.res', 19: 'acs_f435w', 20: 'acs_f606w',
-             21: 'acs_f814w', 22: 'wfc3_f125w', 23: 'wfc3_f140w',
-             24: 'wfc3_f160w', 25: 'CFHTK.res', 26: 'iracch1.res',
+             15: 'SubIB767.res', 16: 'SubIB827.res', 17: 'SubIB856.res',
+             18: 'SubIB907.res', 19: 'acs_f435w.res', 20: 'acs_f606w.res',
+             21: 'acs_f814w.res', 22: 'wfc3_f125w.res', 23: 'wfc3_f140w.res',
+             24: 'wfc3_f160w.res', 25: 'CFHTK.res', 26: 'iracch1.res',
              27: 'iracch2.res', 28: 'VLT_vimos_U.res', 29: 'VLT_vimos_R.res',
              30: 'lasilla22_WFI_U38.res', 31: 'lasilla22_WFI_B.res',
              32: 'lasilla22_WFI_V.res', 33: 'lasilla22_WFI_B.res',
-             34: 'acs_f606w', 35: 'lasilla22_WFI_Rc.res', 36: 'acs_f775w',
-             37: 'lasilla22_WFI_I.res', 38: 'acs_f850lp', 39: 'acs_f850lp',
-             40: 'VLT_issac_J.res', 41: 'wircam_J.res', 42: 'VLT_issac_H.res',
-             43: 'wircam_Ks.res', 44: 'VLT_issac_Ks.res', 45: 'iracch3.res',
-             46: 'iracch4.res', 47: 'SubIB738.res', 48: 'SubIB797.res',
-             49: 'KPNO_mosaicU.res', 50: 'keck_LRIS_g.res',
-             51: 'keck_LRIS_Rs.res', 52: 'SubV.res', 53: 'Subrp.res',
-             54: 'Subip.res', 55: 'Subzp.res', 56: 'Sub_moirics_H.res',
-             57: 'Sub_moirics_J.res', 58: 'Sub_moirics_Ks.res',
-             59: 'CFHTu.res', 60: 'CFHTg.res', 61: 'CFHTr.res',
-             62: 'CFHTz.res', 63: 'ukidss_y', 64: 'ukidss_h', 65: 'ukidss_j',
-             66: 'ukidss_k', 67: 'newfirm_J1.res', 68: 'newfirm_J2.res',
-             69: 'newfirm_J3.res', 70: 'newfirm_H1.res', 71: 'newfirm_H2.res',
-             72: 'newfirm_Ks.res', 73: 'wircam_H.res', 74: 'wircam_J.res',
-             75: 'wircam_Ks.res', 76: 'MIPS24um.res'}
+             34: 'acs_f606w.res', 35: 'lasilla22_WFI_Rc.res',
+             36: 'acs_f775w.res', 37: 'lasilla22_WFI_I.res',
+             38: 'acs_f850lp.res', 39: 'acs_f850lp.res', 40: 'VLT_issac_J.res',
+             41: 'wircam_J.res', 42: 'VLT_issac_H.res', 43: 'wircam_Ks.res',
+             44: 'VLT_issac_Ks.res', 45: 'iracch3.res', 46: 'iracch4.res',
+             47: 'SubIB738.res', 48: 'SubIB797.res', 49: 'KPNO_mosaicU.res',
+             50: 'keck_LRIS_g.res', 51: 'keck_LRIS_Rs.res', 52: 'SubV.res',
+             53: 'Subrp.res', 54: 'Subip.res', 55: 'Subzp.res',
+             56: 'Sub_moirics_H.res', 57: 'Sub_moirics_J.res',
+             58: 'Sub_moirics_Ks.res', 59: 'CFHTu.res', 60: 'CFHTg.res',
+             61: 'CFHTr.res', 62: 'CFHTz.res', 63: 'ukidss_y.res',
+             64: 'ukidss_h.res', 65: 'ukidss_j.res', 66: 'ukidss_k.res',
+             67: 'newfirm_J1.res', 68: 'newfirm_J2.res', 69: 'newfirm_J3.res',
+             70: 'newfirm_H1.res', 71: 'newfirm_H2.res', 72: 'newfirm_Ks.res',
+             73: 'wircam_H.res', 74: 'wircam_J.res', 75: 'wircam_Ks.res',
+             76: 'MIPS24um.res'}
+ 
 
 # Catalog column name of filter and dictionary value to the filter file
 catalog_filter_dict, catalog_maglim_dict = {}, {}
