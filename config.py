@@ -118,8 +118,7 @@ metallicity_dict = {'padova': [0.0002, 0.0003, 0.0004, 0.0005, 0.0006, 0.0008,
 # Filter information from the Skelton+14 catalog
 
 # Common filter file names in FILTERS folder
-# WPBWPB: could remove, if not saving the matrix
-filter_matrix_name = 'standard_filter_matrix.txt'
+
 filt_dict = {0: 'SubB.res', 1: 'SubIB427.res', 2: 'SubIB445.res',
              3: 'SubIB464.res', 4: 'CFHTi.res', 5: 'SubIB484.res',
              6: 'SubIB505.res', 7: 'SubIB527.res', 8: 'SubIB550.res',
