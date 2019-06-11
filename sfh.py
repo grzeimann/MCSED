@@ -624,7 +624,7 @@ class empirical_direct:
     ''' The empirical SFH includes 6 bins of SFR at discrete time intervals '''
     def __init__(self, init_log_sfr=1.2, init_log_sfr_lims=[-5., 3.],
                  init_log_sfr_delta=0.7,
-                 ages=[7., 8., 8.5, 9., 9.3]):
+                 ages=[8., 8.5, 9., 9.3]):
         ''' Initialize this class
         Parameters
         ----------
@@ -703,10 +703,12 @@ class empirical_direct:
 
     def plot(self, ax, color=[238/255., 90/255., 18/255.], alpha=0.2):
         ''' Plot SFH for given set of parameters '''
-        t = np.array([6] + self.ages) - 9.
+        t = 10**(np.array([6] + self.ages) - 9.)
         sfr = self.evaluate(t)
-        ax.step(10**t, np.hstack([sfr[0], sfr]), where='pre',
-                color=color, alpha=alpha)
+#        ax.step(10**t, np.hstack([sfr[0], sfr]), where='pre',
+#                color=color, alpha=alpha)
+        ax.step(t, sfr, where='pre', color=color, alpha=alpha)
+
 
     def evaluate(self, t):
         ''' Evaluate double power law SFH
@@ -719,7 +721,15 @@ class empirical_direct:
         msfr : numpy array (1 dim)
             Star formation rate at given time in time array
         '''
-        return [10**p for p in self.get_params()]
+        # linear SFR in each SFH time bin
+        sfr_bin = 10. ** np.array(self.get_params()) 
+        # Ensure that self.ages, t are both in units of log years
+        t_logyr = np.log10( t * 1e9 ) 
+        bin_indx = np.searchsorted(self.ages, t_logyr, side="left")
+        # adjust any times falling beyond the last SFH age bin
+        bin_indx[ bin_indx > len(sfr_bin)-1 ] = len(sfr_bin)-1
+        sfr = sfr_bin[ bin_indx ]
+        return sfr
 
 
 class empirical:

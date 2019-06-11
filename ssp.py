@@ -54,18 +54,33 @@ def get_coarser_wavelength_fsps(wave, spec, redwave=1e5):
 def bin_ages_fsps(args, ages, spec):
     ''' FILL IN
 
+    Parameters
+    ----------
+    args : FILL IN
+    ages :
+        SSP age grid in Gyr
+
     returns age (Gyr), blah
     '''
     sfh_class = getattr(sfh, args.sfh)()
-    sel = ages >= 6.
+    # WPBWPB delete: input ages are in Gyr
+    sel = ages >= 10**-3
     ages, spec = (ages[sel], spec[:, sel])
-    weight = np.diff(np.hstack([0., 10**ages]))
-    agebin = np.hstack([0., sfh_class.ages])
-    nspec = np.zeros((spec.shape[0], len(sfh_class.ages)))
-    for i in np.arange(len(sfh_class.ages)):
-        sel = np.where((ages >= agebin[i]) * (ages < agebin[i+1]))[0]
+    # weights are the amount of time (yrs) between the age bins
+    weight = np.diff(np.hstack([0., ages * 10**9.]))
+    # t_birth, sfh_class.ages are in units log(years)
+    # WPBWPB delete: want agebin in same units as ages, i.e., Gyr
+    sfh_ages_Gyr = 10.**(np.array(sfh_class.ages)-9.)
+    agebin_list = [10.**(args.t_birth-9.), sfh_ages_Gyr]
+    # Add any SSPs older than last SFH age grid point
+    if max(ages) > max(sfh_ages_Gyr):
+        agebin_list.append( max(ages) )
+    agebin = np.hstack([0.] + agebin_list)
+    nspec = np.zeros((spec.shape[0], len(agebin)-1))
+    for i in np.arange(nspec.shape[1]):
+        sel = np.where((ages > agebin[i]) * (ages <= agebin[i+1]))[0]
         nspec[:, i] = np.dot(spec[:, sel], weight[sel]) / weight[sel].sum()
-    return 10**(np.array(sfh_class.ages)-9.), nspec
+    return agebin[1:], nspec
 
 
 def read_fsps_neb(filename):

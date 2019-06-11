@@ -14,6 +14,8 @@ sfh = 'constant' #'empirical_direct'
 dust_law = 'calzetti' #'noll'  # options include: 'noll', 'calzetti'
 dust_em = 'DL07'  # options include: 'DL07'
 
+t_birth = 7. # age of the birth cloud (log years)
+
 # Dust attenuation law parameters
 # if set to a negative value, use the default value for dust law of choice
 Rv = -1 # extinction factor

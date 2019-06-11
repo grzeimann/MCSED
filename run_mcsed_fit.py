@@ -181,6 +181,7 @@ def parse_args(argv=None):
 # and if cannot be passed on command line, it will already defer to config file
 # unused from parser args... filename, output_filename, test, test_field, parallel, count
     arg_inputs = ['ssp', 'metallicity', 'isochrone', 'sfh', 'dust_law',
+                  't_birth',
                   'nwalkers', 'nsteps', 'add_nebular', 'logU', 'fit_dust_em',
                   'phot_floor_error', 'emline_floor_error', 'nobjects',
                   'dust_em', 'Rv', 'EBV_stars_gas', 'wave_dust_em',
@@ -732,8 +733,8 @@ def main(argv=None, ssp_info=None):
 
 ## WPBWPB delete
 #    print((wave.shape, SSP.shape))
-#    print(ages)
-#    return
+    print(ages)
+    return
 
     # Adjust filter dictionary and emission line dictionary, if applicable
     if (not args.test) & (not args.use_input_data):
@@ -786,6 +787,9 @@ def main(argv=None, ssp_info=None):
         mcsed_model.dust_abs_class.EBV_stars_gas = args.EBV_stars_gas
     else:
         args.EBV_stars_gas = mcsed_model.dust_abs_class.EBV_stars_gas
+
+    # Specify the age of the birth cloud (suffer different attenuation)
+    mcsed_model.t_birth = 10**(args.t_birth-9.) # Gyr
 
 #WPBWPB delete: this is where I adjust additional class params from config.py options
 
