@@ -65,12 +65,17 @@ def bin_ages_fsps(args, ages, spec):
     sfh_class = getattr(sfh, args.sfh)()
     # WPBWPB delete: input ages are in Gyr
     sel = ages >= 10**-3
+## WPBWPB delete
+#    print('these are SSP ages before re-gridding')
+#    print(ages)
     ages, spec = (ages[sel], spec[:, sel])
     # weights are the amount of time (yrs) between the age bins
     weight = np.diff(np.hstack([0., ages * 10**9.]))
     # t_birth, sfh_class.ages are in units log(years)
     # WPBWPB delete: want agebin in same units as ages, i.e., Gyr
     sfh_ages_Gyr = 10.**(np.array(sfh_class.ages)-9.)
+## WPBWPB delete
+#    print('these are sfh_ages_Gyr:\n%s' % sfh_ages_Gyr)
     agebin_list = [10.**(args.t_birth-9.), sfh_ages_Gyr]
     # Add any SSPs older than last SFH age grid point
     if max(ages) > max(sfh_ages_Gyr):
@@ -393,6 +398,9 @@ WPBWPB: operate under assumption that spec, linespec are in same units
     for met in args.metallicity_dict[args.isochrone]:
         if args.ssp.lower() == 'fsps':
             ages, masses, wave, spec = read_fsps(args, met)
+## WPBWPB delete
+#            print('these are ages from read_fsps:')
+#            print(ages)
         # carry emission lines only, for measuring line fluxes
 # WPBWPB: only carry linespec if going to measure emission lines?
         if args.add_nebular:
@@ -406,8 +414,8 @@ WPBWPB: operate under assumption that spec, linespec are in same units
 # WPBWPB add comment
         if args.sfh == 'empirical' or args.sfh == 'empirical_direct':
             ages0 = ages.copy()
-            ages, spec = bin_ages_fsps(args, np.log10(ages0)+9., spec)
-            ages9, linespec = bin_ages_fsps(args, np.log10(ages0)+9., linespec)
+            ages, spec = bin_ages_fsps(args, ages0, spec)
+            ages9, linespec = bin_ages_fsps(args, ages0, linespec)
         masses = np.ones(ages.shape)
         # do not smooth the emission line grid
         wave0 = wave.copy()

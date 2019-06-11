@@ -733,8 +733,8 @@ def main(argv=None, ssp_info=None):
 
 ## WPBWPB delete
 #    print((wave.shape, SSP.shape))
-    print(ages)
-    return
+#    print(ages)
+#    return
 
     # Adjust filter dictionary and emission line dictionary, if applicable
     if (not args.test) & (not args.use_input_data):

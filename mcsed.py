@@ -351,6 +351,12 @@ WPBWPB units??
             sfr = self.sfh_class.evaluate(self.ssp_ages)
         ageval = 10**self.sfh_class.age # Gyr
 
+## WPBWPB delete
+#        print('these are the sfr in SFH age grid in Gyr:')
+#        sfh_ages = 10.**(np.array(self.sfh_class.ages)-9.)
+#        print(sfh_ages)
+#        print(self.sfh_class.evaluate(sfh_ages))
+
         # Treat the birth cloud and diffuse component separately
 # WPBWPB: may want to modify: have this as user-defined setting...
         age_birth = self.t_birth #10**-2 # Gyr 
@@ -376,8 +382,8 @@ WPBWPB units??
 
         # The weight is the time between ages of each SSP
         weight = np.diff(np.hstack([0, self.ssp_ages])) * 1e9 * sfr
-## WPBWPB delete
-#        weight_orig = weight.copy()
+# WPBWPB delete
+        weight_orig = weight.copy()
         weight_birth = weight.copy()
         weight_age = weight.copy()
         # Ages greater than ageval should have zero weight in CSP
@@ -433,8 +439,18 @@ WPBWPB units??
         mass = np.sum(weight_age * self.ssp_masses)
 
 ## WPBWPB delete
-#        dustfree_CSP = self.build_dustfree_CSP(sfr, ageval, age_birth)
-#        spec_dustfree, spec_birth_dustfree, linespec_dustfree, mass = dustfree_CSP 
+#        print('These are the weights, and various properties:')
+#        t = Table()
+#        t['ageval'] = [ageval]*len(weight)
+#        t['age_birth'] = [age_birth]*len(weight)
+#        t['ssp_ages'] = self.ssp_ages
+#        t['sfr'] = sfr
+#        t['weight_orig'] = weight_orig
+#        t['weight_young'] = weight_birth
+#        t['weight_old'] = weight
+#        t['weight_age'] = weight_age
+#        t.write('CSP_weights.dat',format='ascii')
+#        return
 
         # Need to correct spectrum for dust attenuation
         Alam = self.dust_abs_class.evaluate(self.wave)
