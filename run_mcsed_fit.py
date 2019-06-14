@@ -811,6 +811,12 @@ def main(argv=None, ssp_info=None):
     # Build names for parameters and labels for table
     names = mcsed_model.get_param_names()
     names.append('Log Mass')
+    ##GRN Adding the derived parameters
+    names.append('t_10')
+    names.append('t_50')
+    names.append('t_90')
+    names.append('SFR_10')
+    names.append('SFR_100')
     percentiles = args.param_percentiles 
     # WPB field/id
     labels = ['Field', 'ID', 'z']
@@ -834,6 +840,7 @@ def main(argv=None, ssp_info=None):
     # WPB field/id
     mcsed_model.table = Table(names=labels, dtype=['S7', 'i4'] +
                               ['f8']*(len(labels)-2))
+    print "Created the table (but no data rows yet)"
 
     # MAIN FUNCTIONALITY
     if args.test:
@@ -875,8 +882,11 @@ def main(argv=None, ssp_info=None):
                 mcsed_model.triangle_plot('output/triangle_fake_%05d_%s_%s' % (cnt, args.sfh, args.dust_law))
 
             mcsed_model.table.add_row(['Test', cnt, zi] + [0.]*(len(labels)-3))
+            print "Reached point before adding fit info to table"
             last = mcsed_model.add_fitinfo_to_table(percentiles)
+            print "Reached point after adding fit info to table but not yet truth info"
             mcsed_model.add_truth_to_table(tr, last)
+            print "Reached point after adding truth info to table"
             print(mcsed_model.table)
     else:
     # WPB field/id
@@ -978,7 +988,9 @@ def main(argv=None, ssp_info=None):
                 T.sort('rest_wavelength')
                 T.write('output/lineflux_%s_%05d_%s.dat' % (fd, oi, args.sfh),
                         overwrite=True, format='ascii.fixed_width_two_line')
+            print "Reached the point before adding fit info to table"
             last = mcsed_model.add_fitinfo_to_table(percentiles)
+            print "Reached the point after adding fit info to table"
             print(mcsed_model.table)
     if args.parallel:
         return [mcsed_model.table, formats]

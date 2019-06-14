@@ -10,7 +10,7 @@ ssp = 'fsps'  # options include: 'fsps'
 isochrone = 'padova'  # options include: 'padova'
 # SFH options include: 'constant', 'burst', 'polynomial', 'exponential', 
 #                      'double_powerlaw', 'empirical_direct', 'empirical',
-sfh = 'empirical_direct'
+sfh = 'constant' #'empirical_direct'
 dust_law = 'calzetti' #'noll'  # options include: 'noll', 'calzetti'
 dust_em = 'DL07'  # options include: 'DL07'
 
@@ -93,12 +93,12 @@ metallicity = 0.0077  # float for fixed metallicity, False for free metallicity
 #    Supported formats: eps, pdf, pgf, png, ps, raw, rgba, svg, svgz
 output_dict = {'parameters'    : True,
                'settings'      : True, 
-               'fitposterior'  : True,
-               'bestfitspec'   : True,
-               'fluxdensity'   : True,
-               'lineflux'      : True,
-               'triangle plot' : True,
-               'sample plot'   : True,
+               'fitposterior'  : False,
+               'bestfitspec'   : False,
+               'fluxdensity'   : False,
+               'lineflux'      : False,
+               'triangle plot' : False,
+               'sample plot'   : False,
                'image format'  : 'png'}
 # WPBWPB: combine photfluxes into single file, also add emline flux comparison
 
@@ -107,7 +107,7 @@ param_percentiles = [5, 16, 50, 84, 95]
 
 # When running in parallel mode, utilize (Total cores) - reserved_cores
 # WPBWPB clarify
-reserved_cores = 2 # integer
+reserved_cores = 0 # integer
 
 
 # Dictionaries

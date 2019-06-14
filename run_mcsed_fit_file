@@ -1,0 +1,9 @@
+#!/usr/bin/bash
+file=$1
+outname=$2
+
+python run_mcsed_fit.py -f $file -o $outname.dat -p
+mkdir output/$2
+mv output/*.dat output/$outname
+mv output/*.png output/$outname
+mv output/*$outname* output/$outname

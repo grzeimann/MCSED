@@ -29,6 +29,8 @@ import corner
 import time
 # WPBWPB delete astrpy table
 from astropy.table import Table
+from scipy.integrate import quad
+from scipy.interpolate import interp1d
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -710,15 +712,36 @@ WPBWPB units??
         new_chain[:, :, -1] = sampler.lnprobability
         self.samples = new_chain[:, burnin_step:, :].reshape((-1, ndim+2))
 
-    def get_derived_params(self):
+    def calc_gaw(self,t,sfr_f,frac):
+        ''' Calculate time at which the fraction "frac" of the stellar mass in the galaxy was created'''
+        ind = 0
+        stellartot = quad(sfr_f,t[0],t[-1])[0]
+        while quad(sfr_f,t[0],t[ind])[0]/stellartot < frac: ind+=1
+        forward = quad(sfr_f,t[0],t[ind])[0]/stellartot - frac
+        backward = frac - quad(sfr_f,t[0],t[ind-1])[0]/stellartot
+        tot = forward+backward
+        return forward/tot *t[ind-1] + backward/tot * t[ind] #Linear interpolation to get more accurate result
+
+    def get_derived_params(self,params,agenum=None):
         ''' These are not free parameters in the model, but are instead
         calculated from free parameters
         '''
+        if agenum is not None: age = params[agenum]
+        else: age = self.sfh_class.age
+        ageval = 10**age #Age in Gyr
+        t_sfh = np.linspace(ageval-0.1,ageval,num=1000) #From 100 Mya to present
+        sfrarray = self.sfh_class.derived(t_sfh,params)
+        t_gaw = np.geomspace(1.0e-5,ageval,num=250) #From (10000 years after) birth to present
+        sfrfull = self.sfh_class.derived(t_gaw,params)
+        sfr_f = interp1d(t_gaw,sfrfull,kind='cubic',fill_value="extrapolate")
 
-        t20 = None
-        t50 = None
-        sfr10 = None
-        sfr100 = None
+        t10 = self.calc_gaw(t_gaw,sfr_f,0.1)
+        t50 = self.calc_gaw(t_gaw,sfr_f,0.5)
+        t90 = self.calc_gaw(t_gaw,sfr_f,0.9)
+        sfr10 = np.average(sfrarray[t_sfh>=ageval-0.01])
+        sfr100 = np.average(sfrarray)
+
+        return np.log10(t10),np.log10(t50),np.log10(t90),np.log10(sfr10),np.log10(sfr100)
 
 
     def spectrum_plot(self, ax, color=[0.996, 0.702, 0.031], alpha=0.1):
@@ -903,18 +926,44 @@ WPBWPB units??
         fig.savefig("%s.%s" % (outname, imgtype))
         plt.close(fig)
 
-    def add_fitinfo_to_table(self, percentiles, start_value=3, lnprobcut=7.5):
+    def add_fitinfo_to_table(self, percentiles, start_value=3, lnprobcut=7.5,numsamples=20,numder=5):
         ''' Assumes that "Ln Prob" is the last column in self.samples
+        Also calculates derived parameters t_10, t_50, t_90, SFR_100, and SFR_10 (see get_derived_params()) 
+        and adds them to table
         '''
         chi2sel = (self.samples[:, -1] >
                    (np.max(self.samples[:, -1], axis=0) - lnprobcut))
         nsamples = self.samples[chi2sel, :-1]
+        sfhnum = self.sfh_class.get_nparams()
+        sfhnames = self.sfh_class.get_names()
+        if "Log Age" in sfhnames: agenum = sfhnames.index("Log Age")
+        else: agenum=None
+        params = np.zeros((sfhnum,numsamples))
+        #t10,t50,t90,sfr10,sfr100 = np.zeros(numsamples),np.zeros(numsamples),np.zeros(numsamples),np.zeros(numsamples),np.zeros(numsamples)
+        derpar = np.zeros((numsamples,numder))
+        for k in range(sfhnum): #Get random values of SFH parameters based on their distributions
+            params[k] = np.random.choice(nsamples[:,k],size=numsamples)
+
+        for k2 in range(numsamples):
+            derpar[k2] = self.get_derived_params(params[:,k2],agenum)
+            if k2%(numsamples/10)==0: print k2,params[:,k2],derpar[k2]
+
         n = len(percentiles)
         for i, per in enumerate(percentiles):
             for j, v in enumerate(np.percentile(nsamples, per, axis=0)):
                 self.table[-1][(i + start_value + j*n)] = v
-        return (i + start_value + j*n)
+        current = i+start_value+j*n
+        for i,per in enumerate(percentiles):
+            for j,v in enumerate(np.percentile(derpar,per,axis=0)):
+                self.table[-1][(current+i+j*n+1)] = v
+        return (i + current + j*n+1)
 
     def add_truth_to_table(self, truth, start_value):
+        sfhnum = self.sfh_class.get_nparams()
+        sfhtruth = truth[:sfhnum]
+        derpar = self.get_derived_params(sfhtruth)
         for i, tr in enumerate(truth):
             self.table[-1][start_value + i + 1] = tr
+        last = start_value+i+1
+        for j in range(len(derpar)):
+            self.table[-1][last+j+1]=derpar[j]

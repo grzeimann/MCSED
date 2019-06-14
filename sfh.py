@@ -112,9 +112,14 @@ class constant:
         msfr = 10**self.logsfr * np.ones(t.shape)
         return msfr
 
+    def derived(self,t,params):
+        assert len(params)==self.get_nparams()
+        msfr = 10**params[0] * np.ones(t.shape)
+        return msfr
+
 
 class burst:
-    ''' The constant star formation history '''
+    ''' The burst star formation history '''
     def __init__(self, logsfr=1.0, age=-.5, burst_age=7.2, burst_sigma=0.4,
                  burst_strength=5., logsfr_lims=[-3., 3.], age_lims=[-3., 0.4],
                  burst_age_lims=[6., 7.5], burst_sigma_lims=[0.003, 0.5],
@@ -220,7 +225,7 @@ class burst:
         ax.plot(t, sfr, color=color, alpha=alpha)
 
     def evaluate(self, t):
-        ''' Evaluate double power law SFH
+        ''' Evaluate burst SFH
 
         Parameters
         ----------
@@ -239,9 +244,18 @@ class burst:
         msfr = 10**self.logsfr * np.ones(t.shape)
         return msfr + gauss
 
+    def derived(self,t,params):
+        assert len(params)==self.get_nparams()
+        nage = params[2] - 9.
+        norm = (params[3] * 10**params[0] /
+                np.sqrt(2. * np.pi * self.burst_sigma))
+        gauss = norm * np.exp(-0.5 * (np.log10(t) - nage)**2 / self.burst_sigma**2)
+        msfr = 10**params[0] * np.ones(t.shape)
+        return msfr + gauss
+
 
 class polynomial:
-    ''' The constant star formation history '''
+    ''' The polynomial star formation history '''
     def __init__(self, age_locs=[6.5, 7.5, 8.5], age=-.5,
                  age_lims=[-3., 0.4], age_delta=0.2):
         ''' Initialize this class
@@ -354,7 +368,7 @@ class polynomial:
         ax.plot(t, sfr, color=color, alpha=alpha)
 
     def evaluate(self, t):
-        ''' Evaluate double power law SFH
+        ''' Evaluate polynomial SFH
 
         Parameters
         ----------
@@ -371,10 +385,16 @@ class polynomial:
         msfr = 10**(np.polyval(sol, np.log10(t) - self.middle_age + 9.))
         return msfr
 
+    def derived(self,t,params):
+        assert len(params)==self.get_nparams()
+        v = np.array(params[:])
+        sol = np.linalg.lstsq(self.matrix, v)[0]
+        msfr = 10**(np.polyval(sol, np.log10(t) - self.middle_age + 9.))
+        return msfr
 
 class exponential:
 # WPBWPB comment correct? "constant" sfh?
-    ''' The constant star formation history '''
+    ''' The exponential star formation history '''
     def __init__(self, logsfr=1.0, age=-1.0, tau=-1.5, logsfr_lims=[-3., 3.],
                  age_lims=[-3., 0.4], tau_lims=[-3.5, 3.5],
                  logsfr_delta=0.3, age_delta=0.2, tau_delta=0.4,
@@ -464,7 +484,7 @@ WPB REWRITE PARAMETERS
         ax.plot(t, sfr, color=color, alpha=alpha)
 
     def evaluate(self, t):
-        ''' Evaluate double power law SFH
+        ''' Evaluate exponential SFH
 
         Parameters
         ----------
@@ -482,6 +502,16 @@ WPB REWRITE PARAMETERS
             var = 10**self.age - t
             var = np.max([var, np.zeros(var.shape)], axis=0)
         msfr = 10**self.logsfr * np.exp(-1. * var / 10**self.tau)
+        return msfr
+
+    def derived(self,t,params):
+        assert len(params)==self.get_nparams()
+        if self.sign > 0.0:
+            var = t
+        else:
+            var = 10**params[1] - t
+            var = np.max([var, np.zeros(var.shape)], axis=0)
+        msfr = 10**params[0] * np.exp(-1. * var / 10**params[2])
         return msfr
 
 
@@ -618,6 +648,13 @@ WPBWPB add: _delta for remaining parameters
         msfr = (10**(self.a) * ((t / t1)**self.b +
                                 (t / t1)**(-self.c))**(-1))
         return msfr
+    
+    def derived(self,t,params):
+        assert len(params)==self.get_nparams()
+        t1 = 10**params[0]
+        msfr = (10**(params[1]) * ((t / t1)**params[2] +
+                                (t / t1)**(-params[3]))**(-1))
+        return msfr
 
 
 class empirical_direct:
@@ -727,6 +764,22 @@ class empirical_direct:
             t = np.array(t)
         # linear SFR in each SFH time bin
         sfr_bin = 10. ** np.array(self.get_params()) 
+        # Ensure that self.ages, t are both in units of log years
+        t_logyr = np.log10( t * 1e9 ) 
+        bin_indx = np.searchsorted(self.ages, t_logyr, side="left")
+        # adjust any times falling beyond the last SFH age bin
+        bin_indx[ bin_indx > len(sfr_bin)-1 ] = len(sfr_bin)-1
+        sfr = sfr_bin[ bin_indx ]
+        return sfr
+
+    def derived(self,t,params):
+        assert len(params)==self.get_nparams()
+        if type(t) in [float, int]:
+            t = np.array([t])
+        elif type(t) != np.ndarray:
+            t = np.array(t)
+        # linear SFR in each SFH time bin
+        sfr_bin = 10. ** np.array(params) 
         # Ensure that self.ages, t are both in units of log years
         t_logyr = np.log10( t * 1e9 ) 
         bin_indx = np.searchsorted(self.ages, t_logyr, side="left")
@@ -848,7 +901,7 @@ class empirical:
                 color=color, alpha=alpha)
 
     def evaluate(self, t):
-        ''' Evaluate double power law SFH
+        ''' Evaluate empirical SFH
 
         Parameters
         ----------
@@ -861,6 +914,14 @@ class empirical:
             Star formation rate at given time in time array
         '''
         v = self.get_params()
+        v.insert(1, self.firstbin)        
+        mass = 10**v[0]
+        denominator = np.dot(self.tdiff, v[1:])
+        return [mass * p / denominator for p in v[1:]]
+
+    def derived(self,t,params):
+        assert len(params)==self.get_nparams()
+        v = params
         v.insert(1, self.firstbin)        
         mass = 10**v[0]
         denominator = np.dot(self.tdiff, v[1:])
